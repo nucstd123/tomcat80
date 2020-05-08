@@ -22,7 +22,14 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.nio.file.Files;
+import java.security.CodeSource;
+import java.security.Permission;
+import java.security.PermissionCollection;
+import java.security.Policy;
+import java.security.cert.Certificate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -47,6 +54,7 @@ import javax.management.ObjectName;
 import org.apache.catalina.Container;
 import org.apache.catalina.Context;
 import org.apache.catalina.DistributedManager;
+import org.apache.catalina.Globals;
 import org.apache.catalina.Host;
 import org.apache.catalina.Lifecycle;
 import org.apache.catalina.LifecycleEvent;
@@ -54,6 +62,7 @@ import org.apache.catalina.LifecycleListener;
 import org.apache.catalina.Manager;
 import org.apache.catalina.core.StandardContext;
 import org.apache.catalina.core.StandardHost;
+import org.apache.catalina.security.DeployXmlPermission;
 import org.apache.catalina.util.ContextName;
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
@@ -204,9 +213,34 @@ public class HostConfig
      * @param deployXML The new deploy XML flag
      */
     public void setDeployXML(boolean deployXML) {
+        this.deployXML = deployXML;
+    }
 
-        this.deployXML= deployXML;
 
+    private boolean isDeployThisXML(File docBase, ContextName cn) {
+        boolean deployThisXML = isDeployXML();
+        if (Globals.IS_SECURITY_ENABLED && !deployThisXML) {
+            // When running under a SecurityManager, deployXML may be overridden
+            // on a per Context basis by the granting of a specific permission
+            Policy currentPolicy = Policy.getPolicy();
+            if (currentPolicy != null) {
+                URL contextRootUrl;
+                try {
+                    contextRootUrl = docBase.toURI().toURL();
+                    CodeSource cs = new CodeSource(contextRootUrl, (Certificate[]) null);
+                    PermissionCollection pc = currentPolicy.getPermissions(cs);
+                    Permission p = new DeployXmlPermission(cn.getBaseName());
+                    if (pc.implies(p)) {
+                        deployThisXML = true;
+                    }
+                } catch (MalformedURLException e) {
+                    // Should never happen
+                    log.warn("hostConfig.docBaseUrlInvalid", e);
+                }
+            }
+        }
+
+        return deployThisXML;
     }
 
 
@@ -550,8 +584,7 @@ public class HostConfig
             }
 
             Class<?> clazz = Class.forName(host.getConfigClass());
-            LifecycleListener listener =
-                (LifecycleListener) clazz.newInstance();
+            LifecycleListener listener = (LifecycleListener) clazz.getConstructor().newInstance();
             context.addLifecycleListener(listener);
 
             context.setConfigFile(contextXml.toURI().toURL());
@@ -784,8 +817,7 @@ public class HostConfig
         File xml = new File(host.getAppBaseFile(),
                 cn.getBaseName() + "/" + Constants.ApplicationContextXml);
 
-        File warTracker = new File(host.getAppBaseFile(),
-                cn.getBaseName() + "/" + Constants.WarTracker);
+        File warTracker = new File(host.getAppBaseFile(), cn.getBaseName() + Constants.WarTracker);
 
         boolean xmlInWar = false;
         try (JarFile jar = new JarFile(war)) {
@@ -809,8 +841,10 @@ public class HostConfig
         }
 
         Context context = null;
+        boolean deployThisXML = isDeployThisXML(war, cn);
+
         try {
-            if (deployXML && useXml && !copyXML) {
+            if (deployThisXML && useXml && !copyXML) {
                 synchronized (digesterLock) {
                     try {
                         context = (Context) digester.parse(xml);
@@ -826,7 +860,7 @@ public class HostConfig
                     }
                 }
                 context.setConfigFile(xml.toURI().toURL());
-            } else if (deployXML && xmlInWar) {
+            } else if (deployThisXML && xmlInWar) {
                 synchronized (digesterLock) {
                     try (JarFile jar = new JarFile(war)) {
                         JarEntry entry = jar.getJarEntry(Constants.ApplicationContextXml);
@@ -846,14 +880,14 @@ public class HostConfig
                                 UriUtil.buildJarUrl(war, Constants.ApplicationContextXml));
                     }
                 }
-            } else if (!deployXML && xmlInWar) {
+            } else if (!deployThisXML && xmlInWar) {
                 // Block deployment as META-INF/context.xml may contain security
                 // configuration necessary for a secure deployment.
                 log.error(sm.getString("hostConfig.deployDescriptor.blocked",
                         cn.getPath(), Constants.ApplicationContextXml,
                         new File(host.getConfigBaseFile(), cn.getBaseName() + ".xml")));
             } else {
-                context = (Context) Class.forName(contextClass).newInstance();
+                context = (Context) Class.forName(contextClass).getConstructor().newInstance();
             }
         } catch (Throwable t) {
             ExceptionUtils.handleThrowable(t);
@@ -866,7 +900,7 @@ public class HostConfig
         }
 
         boolean copyThisXml = false;
-        if (deployXML) {
+        if (deployThisXML) {
             if (host instanceof StandardHost) {
                 copyThisXml = ((StandardHost) host).isCopyXML();
             }
@@ -902,7 +936,7 @@ public class HostConfig
         }
 
         DeployedApplication deployedApp = new DeployedApplication(cn.getName(),
-                xml.exists() && deployXML && copyThisXml);
+                xml.exists() && deployThisXML && copyThisXml);
 
         long startTime = 0;
         // Deploy the application in this WAR file
@@ -917,7 +951,7 @@ public class HostConfig
             deployedApp.redeployResources.put
                 (war.getAbsolutePath(), Long.valueOf(war.lastModified()));
 
-            if (deployXML && xml.exists() && copyThisXml) {
+            if (deployThisXML && xml.exists() && copyThisXml) {
                 deployedApp.redeployResources.put(xml.getAbsolutePath(),
                         Long.valueOf(xml.lastModified()));
             } else {
@@ -929,8 +963,7 @@ public class HostConfig
             }
 
             Class<?> clazz = Class.forName(host.getConfigClass());
-            LifecycleListener listener =
-                (LifecycleListener) clazz.newInstance();
+            LifecycleListener listener = (LifecycleListener) clazz.getConstructor().newInstance();
             context.addLifecycleListener(listener);
 
             context.setName(cn.getName());
@@ -955,7 +988,7 @@ public class HostConfig
                         Long.valueOf(docBase.lastModified()));
                 addWatchedResources(deployedApp, docBase.getAbsolutePath(),
                         context);
-                if (deployXML && !copyThisXml && (xmlInWar || xml.exists())) {
+                if (deployThisXML && !copyThisXml && (xmlInWar || xml.exists())) {
                     deployedApp.redeployResources.put(xml.getAbsolutePath(),
                             Long.valueOf(xml.lastModified()));
                 }
@@ -1039,10 +1072,11 @@ public class HostConfig
 
 
         DeployedApplication deployedApp;
-        boolean copyThisXml = copyXML;
+        boolean copyThisXml = isCopyXML();
+        boolean deployThisXML = isDeployThisXML(dir, cn);
 
         try {
-            if (deployXML && xml.exists()) {
+            if (deployThisXML && xml.exists()) {
                 synchronized (digesterLock) {
                     try {
                         context = (Context) digester.parse(xml);
@@ -1070,19 +1104,18 @@ public class HostConfig
                 } else {
                     context.setConfigFile(xml.toURI().toURL());
                 }
-            } else if (!deployXML && xml.exists()) {
+            } else if (!deployThisXML && xml.exists()) {
                 // Block deployment as META-INF/context.xml may contain security
                 // configuration necessary for a secure deployment.
                 log.error(sm.getString("hostConfig.deployDescriptor.blocked",
                         cn.getPath(), xml, xmlCopy));
                 context = new FailedContext();
             } else {
-                context = (Context) Class.forName(contextClass).newInstance();
+                context = (Context) Class.forName(contextClass).getConstructor().newInstance();
             }
 
             Class<?> clazz = Class.forName(host.getConfigClass());
-            LifecycleListener listener =
-                (LifecycleListener) clazz.newInstance();
+            LifecycleListener listener = (LifecycleListener) clazz.getConstructor().newInstance();
             context.addLifecycleListener(listener);
 
             context.setName(cn.getName());
@@ -1096,7 +1129,7 @@ public class HostConfig
                     dir.getAbsolutePath()), t);
         } finally {
             deployedApp = new DeployedApplication(cn.getName(),
-                    xml.exists() && deployXML && copyThisXml);
+                    xml.exists() && deployThisXML && copyThisXml);
 
             // Fake re-deploy resource to detect if a WAR is added at a later
             // point
@@ -1104,7 +1137,7 @@ public class HostConfig
                     Long.valueOf(0));
             deployedApp.redeployResources.put(dir.getAbsolutePath(),
                     Long.valueOf(dir.lastModified()));
-            if (deployXML && xml.exists()) {
+            if (deployThisXML && xml.exists()) {
                 if (copyThisXml) {
                     deployedApp.redeployResources.put(
                             xmlCopy.getAbsolutePath(),
@@ -1617,13 +1650,14 @@ public class HostConfig
      * now unused (have no active sessions) and undeploy any that are found.
      */
     public synchronized void checkUndeploy() {
+        if (deployed.size() < 2) {
+            return;
+        }
+
         // Need ordered set of names
         SortedSet<String> sortedAppNames = new TreeSet<>();
         sortedAppNames.addAll(deployed.keySet());
 
-        if (sortedAppNames.size() < 2) {
-            return;
-        }
         Iterator<String> iter = sortedAppNames.iterator();
 
         ContextName previous = new ContextName(iter.next(), false);

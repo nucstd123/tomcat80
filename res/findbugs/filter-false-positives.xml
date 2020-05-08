@@ -28,6 +28,12 @@
     <Bug code="NP" />
   </Match>
   <Match>
+    <!-- Ignoring IOException on InputStream close -->
+    <Class name="javax.el.ExpressionFactory" />
+    <Method name="getClassNameServices" />
+    <Bug code="DE" />
+  </Match>
+  <Match>
     <!-- Only base null is handled by this resolver -->
     <Class name="javax.servlet.jsp.el.ImplicitObjectELResolver"/>
     <Or>
@@ -48,6 +54,13 @@
       <Method name="setValue" />
     </Or>
     <Bug code="NP" />
+  </Match>
+  <Match>
+    <!-- Ignore: Expected if not running on Tomcat. Not a problem since
+            this just allows a short-cut. -->
+    <Class name="javax.servlet.jsp.el.ScopedAttributeELResolver" />
+    <Method name="&lt;clinit&gt;" />
+    <Bug code="DE" />
   </Match>
   <Match>
     <!--  Cannot do anything about this. API is fixed by the specification. -->
@@ -172,6 +185,12 @@
     <Bug code="SWL" />
   </Match>
   <Match>
+    <!-- null return value is documented -->
+    <Class name="org.apache.catalina.core.StandardWrapper" />
+    <Method name="isSingleThreadModel" />
+    <Bug pattern="NP_BOOLEAN_RETURN_NULL" />
+  </Match>
+  <Match>
     <!-- The code is adding HTTP request headers, not parameters and the
          header parsing on input will have removed any CR or LF characters. -->
     <Class name="org.apache.catalina.filters.CorsFilter" />
@@ -182,10 +201,31 @@
     <Bug pattern="HRS_REQUEST_PARAMETER_TO_HTTP_HEADER" />
   </Match>
   <Match>
+    <!-- ParseException is ignored in loop but handled afterwards if all formats failed -->
+    <Class name="org.apache.catalina.filters.RemoteIpFilter$XForwardedRequest" />
+    <Method name="getDateHeader" />
+    <Bug code="DE" />
+  </Match>
+  <Match>
     <!-- shost will not be null in normal usage -->
     <Class name="org.apache.catalina.ha.backend.CollectedInfo" />
     <Method name="init" />
     <Bug code="NP" />
+  </Match>
+  <Match>
+    <!-- Ignore IOException when closing input/output streams in cleanup -->
+    <Class name="org.apache.catalina.ha.deploy.FileMessageFactory" />
+    <Method name="cleanup" />
+    <Bug code="DE" />
+  </Match>
+  <Match>
+    <!-- Ignore exceptions from Thread.sleep() -->
+    <Class name="org.apache.catalina.ha.session.DeltaManager" />
+    <Or>
+      <Method name="handleGET_ALL_SESSIONS" />
+      <Method name="waitForSendAllSessions" />
+    </Or>
+    <Bug code="DE" />
   </Match>
   <Match>
     <!-- Field is only modified during Servlet load -->
@@ -870,6 +910,12 @@
     <Bug code="UG" />
   </Match>
   <Match>
+    <!-- Return value of latch is intentionally ignored -->
+    <Class name="org.apache.catalina.connector.TestSendFile"/>
+    <Method name="testBug60409"/>
+    <Bug pattern="RV_RETURN_VALUE_IGNORED"/>
+  </Match>
+  <Match>
     <Or>
       <Class name="org.apache.catalina.startup.TestListener$SCL" />
       <Class name="org.apache.catalina.startup.TestListener$SCL3" />
@@ -971,6 +1017,12 @@
     <Bug code="DE" />
   </Match>
   <Match>
+    <!-- Concrete Map type not affected -->
+    <Class name="org.apache.catalina.util.TestParameterMap" />
+    <Method name="testEntrySetImmutabilityAfterLocked" />
+    <Bug pattern="DMI_ENTRY_SETS_MAY_REUSE_ENTRY_OBJECTS" />
+  </Match>
+  <Match>
     <!-- Code is deliberately unused -->
     <Or>
       <Class name="org.apache.catalina.webresources.AbstractTestFileResourceSet" />
@@ -982,16 +1034,33 @@
     <Bug pattern="DLS_DEAD_LOCAL_STORE"/>
   </Match>
   <Match>
+    <!-- Use of statics is unavoidable in all cases -->
+    <!-- Better to use it consistently rather than only where necessary -->
+    <Class name="org.apache.tomcat.jdbc.pool.interceptor.TestInterceptor" />
+    <Bug code="ST" />
+  </Match>
+  <Match>
+    <!-- The call with the ignored return value is used to ensure the pool -->
+    <!-- thinks the connection is being used.                              -->
+    <Class name="org.apache.tomcat.jdbc.test.AbandonPercentageTest" />
+    <Method name="testResetConnection" />
+    <Bug pattern="RV_RETURN_VALUE_IGNORED" />
+  </Match>
+  <Match>
     <!-- Use of static is unavoidable -->
     <Class name="org.apache.tomcat.jdbc.test.TestStatementCache" />
     <Method name="tearDown" />
     <Bug code="ST" />
   </Match>
   <Match>
-    <!-- Use of statics is unavoidable in all cases -->
-    <!-- Better to use it consistently rather than only where necessary -->
-    <Class name="org.apache.tomcat.jdbc.pool.interceptor.TestInterceptor" />
-    <Bug code="ST" />
+    <Class name="org.apache.tomcat.jdbc.test.TwoDataSources" />
+    <Method name="testTwoDataSources" />
+    <Or>
+      <!-- The object creation should fail -->
+      <Bug pattern="RV_RETURN_VALUE_IGNORED" />
+      <!-- The connection should be close by the pool -->
+      <Bug pattern="ODR_OPEN_DATABASE_RESOURCE" />
+    </Or>
   </Match>
   <Match>
     <Class name="org.apache.tomcat.util.http.TestCookieParsing$EchoCookieHeader"/>

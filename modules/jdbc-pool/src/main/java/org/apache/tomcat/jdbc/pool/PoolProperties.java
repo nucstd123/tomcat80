@@ -89,6 +89,7 @@ public class PoolProperties implements PoolConfiguration, Cloneable, Serializabl
     private volatile boolean logValidationErrors = false;
     private volatile boolean propagateInterruptState = false;
     private volatile boolean ignoreExceptionOnPreLoad = false;
+    private volatile boolean useStatementFacade = true;
 
     /**
      * {@inheritDoc}
@@ -772,16 +773,16 @@ public class PoolProperties implements PoolConfiguration, Cloneable, Serializabl
                 PoolProperties.class.getClassLoader(),
                 Thread.currentThread().getContextClassLoader()
             );
-            validator = validatorClass.newInstance();
+            validator = validatorClass.getConstructor().newInstance();
         } catch (ClassNotFoundException e) {
             log.warn("The class "+className+" cannot be found.", e);
         } catch (ClassCastException e) {
             log.warn("The class "+className+" does not implement the Validator interface.", e);
-        } catch (InstantiationException e) {
-            log.warn("An object of class "+className+" cannot be instantiated. Make sure that "+
-                     "it includes an implicit or explicit no-arg constructor.", e);
         } catch (IllegalAccessException e) {
             log.warn("The class "+className+" or its no-arg constructor are inaccessible.", e);
+        } catch (ReflectiveOperationException | IllegalArgumentException | SecurityException e) {
+            log.warn("An object of class "+className+" cannot be instantiated. Make sure that "+
+                     "it includes an implicit or explicit no-arg constructor.", e);
         }
     }
 
@@ -918,7 +919,7 @@ public class PoolProperties implements PoolConfiguration, Cloneable, Serializabl
         boolean timer = getTimeBetweenEvictionRunsMillis()>0;
         boolean result = timer && (isRemoveAbandoned() && getRemoveAbandonedTimeout()>0);
         result = result || (timer && getSuspectTimeout()>0);
-        result = result || (timer && isTestWhileIdle() && getValidationQuery()!=null);
+        result = result || (timer && isTestWhileIdle());
         result = result || (timer && getMinEvictableIdleTimeMillis()>0);
         return result;
     }
@@ -1299,6 +1300,22 @@ public class PoolProperties implements PoolConfiguration, Cloneable, Serializabl
     @Override
     public void setIgnoreExceptionOnPreLoad(boolean ignoreExceptionOnPreLoad) {
         this.ignoreExceptionOnPreLoad = ignoreExceptionOnPreLoad;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean getUseStatementFacade() {
+        return useStatementFacade;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void setUseStatementFacade(boolean useStatementFacade) {
+        this.useStatementFacade = useStatementFacade;
     }
 
     @Override

@@ -645,6 +645,7 @@ public class PojoMethodMapping {
                                     "pojoMethodMapping.decodePathParamFail",
                                     valueString, pathParam.getType()), e);
                     params = new Object[] { de };
+                    break;
                 }
                 params[entry.getKey().intValue()] = value;
             }
@@ -722,7 +723,7 @@ public class PojoMethodMapping {
     }
 
 
-    private static enum MethodType {
+    private enum MethodType {
         ON_OPEN,
         ON_CLOSE,
         ON_ERROR

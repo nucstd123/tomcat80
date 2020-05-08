@@ -79,7 +79,7 @@ public class JspServletWrapper {
     }
 
     // Logger
-    private final Log log = LogFactory.getLog(JspServletWrapper.class);
+    private final Log log = LogFactory.getLog(JspServletWrapper.class); // must not be static
 
     private Servlet theServlet;
     private final String jspUri;
@@ -289,7 +289,7 @@ public class JspServletWrapper {
                     tagHandlerClass = ctxt.load();
                     reload = false;
                 }
-                target = tagHandlerClass.newInstance();
+                target = tagHandlerClass.getConstructor().newInstance();
             } else {
                 target = getServlet();
             }
@@ -526,7 +526,7 @@ public class JspServletWrapper {
      * number in the generated servlet that originated the exception to a line
      * number in the JSP.  Then constructs an exception containing that
      * information, and a snippet of the JSP to help debugging.
-     * Please see http://bz.apache.org/bugzilla/show_bug.cgi?id=37062 and
+     * Please see https://bz.apache.org/bugzilla/show_bug.cgi?id=37062 and
      * http://www.tfenne.com/jasper/ for more details.
      *</p>
      *

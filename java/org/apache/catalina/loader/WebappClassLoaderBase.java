@@ -24,7 +24,6 @@ import java.io.InputStream;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.IllegalClassFormatException;
 import java.lang.ref.Reference;
-import java.lang.ref.WeakReference;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -55,8 +54,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.ResourceBundle;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -78,7 +75,6 @@ import org.apache.tomcat.InstrumentableClassLoader;
 import org.apache.tomcat.util.ExceptionUtils;
 import org.apache.tomcat.util.IntrospectionUtils;
 import org.apache.tomcat.util.compat.JreCompat;
-import org.apache.tomcat.util.compat.JreVendor;
 import org.apache.tomcat.util.res.StringManager;
 import org.apache.tomcat.util.security.PermissionCheck;
 
@@ -397,6 +393,12 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
     private boolean clearReferencesHttpClientKeepAliveThread = true;
 
     /**
+     * Should Tomcat attempt to clear references to classes loaded by this class
+     * loader from the ObjectStreamClass caches?
+     */
+    private boolean clearReferencesObjectStreamClassCaches = true;
+
+    /**
      * Holds the class file transformers decorating this class loader. The
      * CopyOnWriteArrayList is thread safe. It is expensive on writes, but
      * those should be rare. It is very fast on reads, since synchronization
@@ -650,6 +652,17 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
             boolean clearReferencesHttpClientKeepAliveThread) {
         this.clearReferencesHttpClientKeepAliveThread =
             clearReferencesHttpClientKeepAliveThread;
+    }
+
+
+    public boolean getClearReferencesObjectStreamClassCaches() {
+        return clearReferencesObjectStreamClassCaches;
+    }
+
+
+    public void setClearReferencesObjectStreamClassCaches(
+            boolean clearReferencesObjectStreamClassCaches) {
+        this.clearReferencesObjectStreamClassCaches = clearReferencesObjectStreamClassCaches;
     }
 
 
@@ -1239,8 +1252,14 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
                 // https://bz.apache.org/bugzilla/show_bug.cgi?id=58125 for
                 // details) when running under a security manager in rare cases
                 // this call may trigger a ClassCircularityError.
+                // See https://bz.apache.org/bugzilla/show_bug.cgi?id=61424 for
+                // details of how this may trigger a StackOverflowError
+                // Given these reported errors, catch Throwable to ensure any
+                // other edge cases are also caught
                 tryLoadingFromJavaseLoader = (javaseLoader.getResource(resourceName) != null);
-            } catch (ClassCircularityError cce) {
+            } catch (Throwable t) {
+                // Swallow all exceptions apart from those that must be re-thrown
+                ExceptionUtils.handleThrowable(t);
                 // The getResource() trick won't work for this class. We have to
                 // try loading it directly and accept that we might get a
                 // ClassNotFoundException.
@@ -1587,6 +1606,11 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
         // Stop any threads the web application started
         clearReferencesThreads();
 
+        // Clear any references retained in the serialization caches
+        if (clearReferencesObjectStreamClassCaches) {
+            clearReferencesObjectStreamClassCaches();
+        }
+
         // Check for leaks triggered by ThreadLocals loaded by this class loader
         checkThreadLocalsForLeaks();
 
@@ -1608,13 +1632,6 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
         if (clearReferencesLogFactoryRelease) {
             org.apache.juli.logging.LogFactory.release(this);
         }
-
-        // Clear the resource bundle cache
-        // This shouldn't be necessary, the cache uses weak references but
-        // it has caused leaks. Oddly, using the leak detection code in
-        // standard host allows the class loader to be GC'd. This has been seen
-        // on Sun but not IBM JREs. Maybe a bug in Sun's GC impl?
-        clearReferencesResourceBundles();
 
         // Clear the classloader reference in the VM's bean introspector
         java.beans.Introspector.flushCaches();
@@ -1663,7 +1680,7 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
             Class<?> lpClass =
                 defineClass("org.apache.catalina.loader.JdbcLeakPrevention",
                     classBytes, 0, offset, this.getClass().getProtectionDomain());
-            Object obj = lpClass.newInstance();
+            Object obj = lpClass.getConstructor().newInstance();
             @SuppressWarnings("unchecked")
             List<String> driverNames = (List<String>) obj.getClass().getMethod(
                     "clearJdbcDriverRegistrations").invoke(obj);
@@ -2295,16 +2312,18 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
             stubField.setAccessible(true);
 
             // Clear the objTable map
-            Class<?> objectTableClass =
-                Class.forName("sun.rmi.transport.ObjectTable");
+            Class<?> objectTableClass = Class.forName("sun.rmi.transport.ObjectTable");
             Field objTableField = objectTableClass.getDeclaredField("objTable");
             objTableField.setAccessible(true);
             Object objTable = objTableField.get(null);
             if (objTable == null) {
                 return;
             }
+            Field tableLockField = objectTableClass.getDeclaredField("tableLock");
+            tableLockField.setAccessible(true);
+            Object tableLock = tableLockField.get(null);
 
-            synchronized (objTable) {
+            synchronized (tableLock) {
                 // Iterate over the values in the table
                 if (objTable instanceof Map<?,?>) {
                     Iterator<?> iter = ((Map<?,?>) objTable).values().iterator();
@@ -2361,90 +2380,32 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
     }
 
 
-    /**
-     * Clear the {@link ResourceBundle} cache of any bundles loaded by this
-     * class loader or any class loader where this loader is a parent class
-     * loader. Whilst {@link ResourceBundle#clearCache()} could be used there
-     * are complications around the
-     * {@link org.apache.jasper.servlet.JasperLoader} that mean a reflection
-     * based approach is more likely to be complete.
-     *
-     * The ResourceBundle is using WeakReferences so it shouldn't be pinning the
-     * class loader in memory. However, it is. Therefore clear ou the
-     * references.
-     */
-    private void clearReferencesResourceBundles() {
-        // Get a reference to the cache
+    private void clearReferencesObjectStreamClassCaches() {
         try {
-            Field cacheListField =
-                ResourceBundle.class.getDeclaredField("cacheList");
-            cacheListField.setAccessible(true);
+            Class<?> clazz = Class.forName("java.io.ObjectStreamClass$Caches");
+            clearCache(clazz, "localDescs");
+            clearCache(clazz, "reflectors");
+        } catch (ReflectiveOperationException | SecurityException | ClassCastException e) {
+            log.warn(sm.getString(
+                    "webappClassLoader.clearObjectStreamClassCachesFail", getContextName()), e);
+        }
+    }
 
-            // Java 6 uses ConcurrentMap
-            // Java 5 uses SoftCache extends Abstract Map
-            // So use Map and it *should* work with both
-            Map<?,?> cacheList = (Map<?,?>) cacheListField.get(null);
 
-            // Get the keys (loader references are in the key)
-            Set<?> keys = cacheList.keySet();
-
-            Field loaderRefField = null;
-
-            // Iterate over the keys looking at the loader instances
-            Iterator<?> keysIter = keys.iterator();
-
-            int countRemoved = 0;
-
-            while (keysIter.hasNext()) {
-                Object key = keysIter.next();
-
-                if (loaderRefField == null) {
-                    loaderRefField =
-                        key.getClass().getDeclaredField("loaderRef");
-                    loaderRefField.setAccessible(true);
-                }
-                WeakReference<?> loaderRef =
-                    (WeakReference<?>) loaderRefField.get(key);
-
-                ClassLoader loader = (ClassLoader) loaderRef.get();
-
-                while (loader != null && loader != this) {
-                    loader = loader.getParent();
-                }
-
-                if (loader != null) {
-                    keysIter.remove();
-                    countRemoved++;
+    private void clearCache(Class<?> target, String mapName)
+            throws ReflectiveOperationException, SecurityException, ClassCastException {
+        Field f = target.getDeclaredField(mapName);
+        f.setAccessible(true);
+        Map<?,?> map = (Map<?,?>) f.get(null);
+        Iterator<?> keys = map.keySet().iterator();
+        while (keys.hasNext()) {
+            Object key = keys.next();
+            if (key instanceof Reference) {
+                Object clazz = ((Reference<?>) key).get();
+                if (loadedByThisOrChild(clazz)) {
+                    keys.remove();
                 }
             }
-
-            if (countRemoved > 0 && log.isDebugEnabled()) {
-                log.debug(sm.getString(
-                        "webappClassLoader.clearReferencesResourceBundlesCount",
-                        Integer.valueOf(countRemoved), getContextName()));
-            }
-        } catch (SecurityException e) {
-            log.warn(sm.getString(
-                    "webappClassLoader.clearReferencesResourceBundlesFail",
-                    getContextName()), e);
-        } catch (NoSuchFieldException e) {
-            if (JreVendor.IS_ORACLE_JVM) {
-                log.warn(sm.getString(
-                        "webappClassLoader.clearReferencesResourceBundlesFail",
-                        getContextName()), e);
-            } else {
-                log.debug(sm.getString(
-                        "webappClassLoader.clearReferencesResourceBundlesFail",
-                        getContextName()), e);
-            }
-        } catch (IllegalArgumentException e) {
-            log.warn(sm.getString(
-                    "webappClassLoader.clearReferencesResourceBundlesFail",
-                    getContextName()), e);
-        } catch (IllegalAccessException e) {
-            log.warn(sm.getString(
-                    "webappClassLoader.clearReferencesResourceBundlesFail",
-                    getContextName()), e);
         }
     }
 
@@ -2502,9 +2463,10 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
             if (transformers.size() > 0) {
                 // If the resource is a class just being loaded, decorate it
                 // with any attached transformers
-                String className = name.endsWith(CLASS_FILE_SUFFIX) ?
-                        name.substring(0, name.length() - CLASS_FILE_SUFFIX.length()) : name;
-                String internalName = className.replace(".", "/");
+
+                // Ignore leading '/' and trailing CLASS_FILE_SUFFIX
+                // Should be cheaper than replacing '.' by '/' in class name.
+                String internalName = path.substring(1, path.length() - CLASS_FILE_SUFFIX.length());
 
                 for (ClassFileTransformer transformer : this.transformers) {
                     try {
@@ -2934,5 +2896,25 @@ public abstract class WebappClassLoaderBase extends URLClassLoader
             }
         }
         return null;
+    }
+
+
+    @Override
+    public boolean hasLoggingConfig() {
+        if (Globals.IS_SECURITY_ENABLED) {
+            Boolean result = AccessController.doPrivileged(new PrivilegedHasLoggingConfig());
+            return result.booleanValue();
+        } else {
+            return findResource("logging.properties") != null;
+        }
+    }
+
+
+    private class PrivilegedHasLoggingConfig implements PrivilegedAction<Boolean> {
+
+        @Override
+        public Boolean run() {
+            return Boolean.valueOf(findResource("logging.properties") != null);
+        }
     }
 }

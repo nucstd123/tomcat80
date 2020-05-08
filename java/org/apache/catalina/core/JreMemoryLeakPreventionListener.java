@@ -20,8 +20,6 @@ package org.apache.catalina.core;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.net.URLConnection;
 import java.sql.DriverManager;
 import java.util.StringTokenizer;
@@ -402,22 +400,17 @@ public class JreMemoryLeakPreventionListener implements LifecycleListener {
                  * include:
                  * - log4j versions 1.2.15 and earlier
                  * - javax.xml.bind.JAXBContext.newInstance()
+                 *
+                 * Java 9 onwards disables caching for JAR URLConnections
+                 * Java 8 and earlier disables caching for all URLConnections
                  */
 
                 // Set the default URL caching policy to not to cache
                 if (urlCacheProtection) {
                     try {
-                        // Doesn't matter that this JAR doesn't exist - just as
-                        // long as the URL is well-formed
-                        URL url = new URL("jar:file://dummy.jar!/");
-                        URLConnection uConn = url.openConnection();
-                        uConn.setDefaultUseCaches(false);
-                    } catch (MalformedURLException e) {
-                        log.error(sm.getString(
-                                "jreLeakListener.jarUrlConnCacheFail"), e);
+                        JreCompat.getInstance().disableCachingForJarUrlConnections();
                     } catch (IOException e) {
-                        log.error(sm.getString(
-                                "jreLeakListener.jarUrlConnCacheFail"), e);
+                        log.error(sm.getString("jreLeakListener.jarUrlConnCacheFail"), e);
                     }
                 }
 
@@ -465,9 +458,12 @@ public class JreMemoryLeakPreventionListener implements LifecycleListener {
                 }
 
                 /*
-                 * Present in Java 8 onwards
+                 * Present in Java 7 onwards
+                 * Work-around only available in Java 8.
+                 * Fixed in Java 9 (from early access build 156)
                  */
-                if (forkJoinCommonPoolProtection & JreCompat.isJre8Available()) {
+                if (forkJoinCommonPoolProtection && JreCompat.isJre8Available() &&
+                        !JreCompat.isJre9Available()) {
                     // Don't override any explicitly set property
                     if (System.getProperty(FORK_JOIN_POOL_THREAD_FACTORY_PROPERTY) == null) {
                         System.setProperty(FORK_JOIN_POOL_THREAD_FACTORY_PROPERTY,

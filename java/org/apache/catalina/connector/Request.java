@@ -1519,6 +1519,9 @@ public class Request
     private void notifyAttributeAssigned(String name, Object value,
             Object oldValue) {
         Context context = getContext();
+        if (context == null) {
+            return;
+        }
         Object listeners[] = context.getApplicationEventListeners();
         if ((listeners == null) || (listeners.length == 0)) {
             return;
@@ -1875,24 +1878,35 @@ public class Request
      *
      * @param principal The user Principal
      */
-    public void setUserPrincipal(Principal principal) {
-
-        if (Globals.IS_SECURITY_ENABLED){
-            HttpSession session = getSession(false);
-            if ( (subject != null) &&
-                 (!subject.getPrincipals().contains(principal)) ){
+    public void setUserPrincipal(final Principal principal) {
+        if (Globals.IS_SECURITY_ENABLED) {
+            if (subject == null) {
+                final HttpSession session = getSession(false);
+                if (session == null) {
+                    // Cache the subject in the request
+                    subject = newSubject(principal);
+                } else {
+                    // Cache the subject in the request and the session
+                    subject = (Subject) session.getAttribute(Globals.SUBJECT_ATTR);
+                    if (subject == null) {
+                        subject = newSubject(principal);
+                        session.setAttribute(Globals.SUBJECT_ATTR, subject);
+                    } else {
+                        subject.getPrincipals().add(principal);
+                    }
+                }
+            } else {
                 subject.getPrincipals().add(principal);
-            } else if (session != null &&
-                        session.getAttribute(Globals.SUBJECT_ATTR) == null) {
-                subject = new Subject();
-                subject.getPrincipals().add(principal);
-            }
-            if (session != null){
-                session.setAttribute(Globals.SUBJECT_ATTR, subject);
             }
         }
+        userPrincipal = principal;
+    }
 
-        this.userPrincipal = principal;
+
+    private Subject newSubject(final Principal principal) {
+        final Subject result = new Subject();
+        result.getPrincipals().add(principal);
+        return result;
     }
 
 
@@ -1912,7 +1926,9 @@ public class Request
         try {
             instanceManager = getContext().getInstanceManager();
             handler = (T) instanceManager.newInstance(httpUpgradeHandlerClass);
-        } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NamingException e) {
+        } catch (InstantiationException | IllegalAccessException | InvocationTargetException |
+                NamingException | IllegalArgumentException | NoSuchMethodException |
+                SecurityException e) {
             throw new ServletException(e);
         }
         UpgradeToken upgradeToken = new UpgradeToken(handler,
@@ -1942,15 +1958,28 @@ public class Request
      */
     @Override
     public String getContextPath() {
-        String canonicalContextPath = getServletContext().getContextPath();
-        String uri = getRequestURI();
-        char[] uriChars = uri.toCharArray();
         int lastSlash = mappingData.contextSlashCount;
         // Special case handling for the root context
         if (lastSlash == 0) {
             return "";
         }
+
+        String canonicalContextPath = getServletContext().getContextPath();
+
+        String uri = getRequestURI();
         int pos = 0;
+        if (!getContext().getAllowMultipleLeadingForwardSlashInPath()) {
+            // Ensure that the returned value only starts with a single '/'.
+            // This prevents the value being misinterpreted as a protocol-
+            // relative URI if used with sendRedirect().
+            do {
+                pos++;
+            } while (pos < uri.length() && uri.charAt(pos) == '/');
+            pos--;
+            uri = uri.substring(pos);
+        }
+
+        char[] uriChars = uri.toCharArray();
         // Need at least the number of slashes in the context path
         while (lastSlash > 0) {
             pos = nextSlash(uriChars, pos + 1);

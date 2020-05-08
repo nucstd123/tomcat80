@@ -51,11 +51,11 @@
   <p>The native connectors supported with this Tomcat release are:</p>
     <ul>
       <li>JK 1.2.x with any of the supported servers. See
-      <a href="http://tomcat.apache.org/connectors-doc/">the JK docs</a>
+      <a href="https://tomcat.apache.org/connectors-doc/">the JK docs</a>
       for details.</li>
       <li>mod_proxy on Apache httpd 2.x (included by default in Apache HTTP
       Server 2.2), with AJP enabled: see
-      <a href="http://httpd.apache.org/docs/2.2/mod/mod_proxy_ajp.html">the
+      <a href="https://httpd.apache.org/docs/2.2/mod/mod_proxy_ajp.html">the
       httpd docs</a> for details.</li>
     </ul>
 
@@ -411,13 +411,14 @@
     </attribute>
 
     <attribute name="minSpareThreads" required="false">
-      <p>The minimum number of threads always kept running. If not specified,
-      the default of <code>10</code> is used. If an executor is associated
-      with this connector, this attribute is ignored as the connector will
-      execute tasks using the executor rather than an internal thread pool. Note
-      that if an executor is configured any value set for this attribute will be
-      recorded correctly but it will be reported (e.g. via JMX) as
-      <code>-1</code> to make clear that it is not used.</p>
+      <p>The minimum number of threads always kept running. This includes both
+      active and idle threads. If not specified, the default of <code>10</code>
+      is used. If an executor is associated with this connector, this attribute
+      is ignored as the connector will execute tasks using the executor rather
+      than an internal thread pool. Note that if an executor is configured any
+      value set for this attribute will be recorded correctly but it will be
+      reported (e.g. via JMX) as <code>-1</code> to make clear that it is not
+      used.</p>
     </attribute>
 
     <attribute name="packetSize" required="false">

@@ -142,7 +142,7 @@ public class ContextConfig implements LifecycleListener {
         // Load our mapping properties for the standard authenticators
         Properties props = new Properties();
         try (InputStream is = ContextConfig.class.getClassLoader().getResourceAsStream(
-                "org/apache/catalina/startup/Authenticators.properties");) {
+                "org/apache/catalina/startup/Authenticators.properties")) {
             if (is != null) {
                 props.load(is);
             }
@@ -350,20 +350,10 @@ public class ContextConfig implements LifecycleListener {
     protected void authenticatorConfig() {
 
         LoginConfig loginConfig = context.getLoginConfig();
-
-        SecurityConstraint constraints[] = context.findConstraints();
-        if (context.getIgnoreAnnotations() &&
-                (constraints == null || constraints.length ==0) &&
-                !context.getPreemptiveAuthentication())  {
-            return;
-        } else {
-            if (loginConfig == null) {
-                // Not metadata-complete or security constraints present, need
-                // an authenticator to support @ServletSecurity annotations
-                // and/or constraints
-                loginConfig = DUMMY_LOGIN_CONFIG;
-                context.setLoginConfig(loginConfig);
-            }
+        if (loginConfig == null) {
+            // Need an authenticator to support HttpServletRequest.login()
+            loginConfig = DUMMY_LOGIN_CONFIG;
+            context.setLoginConfig(loginConfig);
         }
 
         // Has an authenticator been configured already?
@@ -409,7 +399,7 @@ public class ContextConfig implements LifecycleListener {
             // Instantiate and install an Authenticator of the requested class
             try {
                 Class<?> authenticatorClass = Class.forName(authenticatorName);
-                authenticator = (Valve) authenticatorClass.newInstance();
+                authenticator = (Valve) authenticatorClass.getConstructor().newInstance();
             } catch (Throwable t) {
                 ExceptionUtils.handleThrowable(t);
                 log.error(sm.getString(

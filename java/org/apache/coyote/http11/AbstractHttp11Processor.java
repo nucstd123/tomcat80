@@ -46,10 +46,10 @@ import org.apache.coyote.http11.filters.VoidOutputFilter;
 import org.apache.tomcat.util.ExceptionUtils;
 import org.apache.tomcat.util.buf.Ascii;
 import org.apache.tomcat.util.buf.ByteChunk;
-import org.apache.tomcat.util.buf.HexUtils;
 import org.apache.tomcat.util.buf.MessageBytes;
 import org.apache.tomcat.util.http.FastHttpDateFormat;
 import org.apache.tomcat.util.http.MimeHeaders;
+import org.apache.tomcat.util.http.parser.HttpParser;
 import org.apache.tomcat.util.log.UserDataHelper;
 import org.apache.tomcat.util.net.AbstractEndpoint;
 import org.apache.tomcat.util.net.AbstractEndpoint.Handler.SocketState;
@@ -59,9 +59,6 @@ import org.apache.tomcat.util.net.SocketWrapper;
 import org.apache.tomcat.util.res.StringManager;
 
 public abstract class AbstractHttp11Processor<S> extends AbstractProcessor<S> {
-
-    private final UserDataHelper userDataHelper;
-
 
     /**
      * The string manager for this package.
@@ -210,15 +207,10 @@ public abstract class AbstractHttp11Processor<S> extends AbstractProcessor<S> {
 
     /**
      * List of MIMES which could be gzipped
+     * Note: This is not spelled correctly but can't be changed without breaking
+     *       compatibility
      */
-    protected String[] compressableMimeTypes =
-    { "text/html", "text/xml", "text/plain" };
-
-
-    /**
-     * Host name (used to avoid useless B2C conversion on the host name).
-     */
-    protected char[] hostNameC = new char[0];
+    protected String[] compressableMimeTypes = { "text/html", "text/xml", "text/plain" };
 
 
     /**
@@ -234,9 +226,38 @@ public abstract class AbstractHttp11Processor<S> extends AbstractProcessor<S> {
     protected UpgradeToken upgradeToken = null;
 
 
+    private boolean allowHostHeaderMismatch = true;
+
+
+    protected HttpParser httpParser;
+
+
+    /**
+     * Will Tomcat accept an HTTP 1.1 request where the host header does not
+     * agree with the host specified (if any) in the request line?
+     *
+     * @return {@code true} if Tomcat will allow such requests, otherwise
+     *         {@code false}
+     */
+    public boolean getAllowHostHeaderMismatch() {
+        return allowHostHeaderMismatch;
+    }
+
+
+    /**
+     * Will Tomcat accept an HTTP 1.1 request where the host header does not
+     * agree with the host specified (if any) in the request line?
+     *
+     * @param allowHostHeaderMismatch {@code true} to allow such requests,
+     *                                {@code false} to reject them with a 400
+     */
+    public void setAllowHostHeaderMismatch(boolean allowHostHeaderMismatch) {
+        this.allowHostHeaderMismatch = allowHostHeaderMismatch;
+    }
+
+
     public AbstractHttp11Processor(AbstractEndpoint<S> endpoint) {
         super(endpoint);
-        userDataHelper = new UserDataHelper(getLog());
     }
 
 
@@ -285,6 +306,34 @@ public abstract class AbstractHttp11Processor<S> extends AbstractProcessor<S> {
         }
     }
 
+
+    /**
+     * @deprecated Use {@link #addCompressibleMimeType(String)}
+     */
+    @Deprecated
+    public void addCompressableMimeType(String mimeType) {
+        addCompressibleMimeType(mimeType);
+    }
+
+
+    /**
+     * @deprecated Use {@link #setCompressibleMimeTypes(String[])}
+     */
+    @Deprecated
+    public void setCompressableMimeTypes(String[] compressibleMimeTypes) {
+        setCompressibleMimeTypes(compressibleMimeTypes);
+    }
+
+
+    /**
+     * @deprecated Use {@link #setCompressibleMimeTypes(String)}
+     */
+    @Deprecated
+    public void setCompressableMimeTypes(String compressibleMimeTypes) {
+        setCompressibleMimeTypes(compressibleMimeTypes);
+    }
+
+
     /**
      * Add a mime-type which will be compressible
      * The mime-type String will be exactly matched
@@ -292,9 +341,8 @@ public abstract class AbstractHttp11Processor<S> extends AbstractProcessor<S> {
      *
      * @param mimeType mime-type string
      */
-    public void addCompressableMimeType(String mimeType) {
-        compressableMimeTypes =
-            addStringArray(compressableMimeTypes, mimeType);
+    public void addCompressibleMimeType(String mimeType) {
+        compressableMimeTypes = addStringArray(compressableMimeTypes, mimeType);
     }
 
 
@@ -303,24 +351,24 @@ public abstract class AbstractHttp11Processor<S> extends AbstractProcessor<S> {
      * a large number of connectors, where it would be better to have all of
      * them referenced a single array).
      */
-    public void setCompressableMimeTypes(String[] compressableMimeTypes) {
-        this.compressableMimeTypes = compressableMimeTypes;
+    public void setCompressibleMimeTypes(String[] compressibleMimeTypes) {
+        this.compressableMimeTypes = compressibleMimeTypes;
     }
 
 
     /**
-     * Set compressable mime-type list
+     * Set compressible mime-type list
      * List contains users agents separated by ',' :
      *
      * ie: "text/html,text/xml,text/plain"
      */
-    public void setCompressableMimeTypes(String compressableMimeTypes) {
-        if (compressableMimeTypes != null) {
+    public void setCompressibleMimeTypes(String compressibleMimeTypes) {
+        if (compressibleMimeTypes != null) {
             this.compressableMimeTypes = null;
-            StringTokenizer st = new StringTokenizer(compressableMimeTypes, ",");
+            StringTokenizer st = new StringTokenizer(compressibleMimeTypes, ",");
 
             while (st.hasMoreTokens()) {
-                addCompressableMimeType(st.nextToken().trim());
+                addCompressibleMimeType(st.nextToken().trim());
             }
         }
     }
@@ -514,14 +562,14 @@ public abstract class AbstractHttp11Processor<S> extends AbstractProcessor<S> {
     /**
      * Check if the resource could be compressed, if the client supports it.
      */
-    private boolean isCompressable() {
+    private boolean isCompressible() {
 
-        // Check if content is not already gzipped
-        MessageBytes contentEncodingMB =
-            response.getMimeHeaders().getValue("Content-Encoding");
+        // Check if content is not already compressed
+        MessageBytes contentEncodingMB = response.getMimeHeaders().getValue("Content-Encoding");
 
-        if ((contentEncodingMB != null)
-            && (contentEncodingMB.indexOf("gzip") != -1)) {
+        if ((contentEncodingMB != null) &&
+                (contentEncodingMB.indexOf("gzip") != -1 ||
+                        contentEncodingMB.indexOf("br") != -1)) {
             return false;
         }
 
@@ -1315,29 +1363,137 @@ public abstract class AbstractHttp11Processor<S> extends AbstractProcessor<S> {
             }
         }
 
-        // Check for a full URI (including protocol://host:port/)
-        ByteChunk uriBC = request.requestURI().getByteChunk();
-        if (uriBC.startsWithIgnoreCase("http", 0)) {
 
-            int pos = uriBC.indexOf("://", 0, 3, 4);
-            int uriBCStart = uriBC.getStart();
-            int slashPos = -1;
-            if (pos != -1) {
-                byte[] uriB = uriBC.getBytes();
-                slashPos = uriBC.indexOf('/', pos + 3);
+        // Check host header
+        MessageBytes hostValueMB = null;
+        try {
+            hostValueMB = headers.getUniqueValue("host");
+        } catch (IllegalArgumentException iae) {
+            // Multiple Host headers are not permitted
+            // 400 - Bad request
+            response.setStatus(400);
+            setErrorState(ErrorState.CLOSE_CLEAN, null);
+            if (getLog().isDebugEnabled()) {
+                getLog().debug(sm.getString("http11processor.request.multipleHosts"));
+            }
+        }
+        if (http11 && hostValueMB == null) {
+            // 400 - Bad request
+            response.setStatus(400);
+            setErrorState(ErrorState.CLOSE_CLEAN, null);
+            if (getLog().isDebugEnabled()) {
+                getLog().debug(sm.getString("http11processor.request.noHostHeader"));
+            }
+        }
+
+        // Check for an absolute-URI less the query string which has already
+        // been removed during the parsing of the request line
+        ByteChunk uriBC = request.requestURI().getByteChunk();
+        byte[] uriB = uriBC.getBytes();
+        if (uriBC.startsWithIgnoreCase("http", 0)) {
+            int pos = 4;
+            // Check for https
+            if (uriBC.startsWithIgnoreCase("s", pos)) {
+                pos++;
+            }
+            // Next 3 characters must be "://"
+            if (uriBC.startsWith("://", pos)) {
+                pos += 3;
+                int uriBCStart = uriBC.getStart();
+
+                // '/' does not appear in the authority so use the first
+                // instance to split the authority and the path segments
+                int slashPos = uriBC.indexOf('/', pos);
+                // '@' in the authority delimits the userinfo
+                int atPos = uriBC.indexOf('@', pos);
+                if (slashPos > -1 && atPos > slashPos) {
+                    // First '@' is in the path segments so no userinfo
+                    atPos = -1;
+                }
+
                 if (slashPos == -1) {
                     slashPos = uriBC.getLength();
-                    // Set URI as "/"
-                    request.requestURI().setBytes
-                        (uriB, uriBCStart + pos + 1, 1);
+                    // Set URI as "/". Use 6 as it will always be a '/'.
+                    // 01234567
+                    // http://
+                    // https://
+                    request.requestURI().setBytes(uriB, uriBCStart + 6, 1);
                 } else {
-                    request.requestURI().setBytes
-                        (uriB, uriBCStart + slashPos,
-                         uriBC.getLength() - slashPos);
+                    request.requestURI().setBytes(uriB, uriBCStart + slashPos, uriBC.getLength() - slashPos);
                 }
-                MessageBytes hostMB = headers.setValue("host");
-                hostMB.setBytes(uriB, uriBCStart + pos + 3,
-                                slashPos - pos - 3);
+
+                // Skip any user info
+                if (atPos != -1) {
+                    // Validate the userinfo
+                    for (; pos < atPos; pos++) {
+                        byte c = uriB[uriBCStart + pos];
+                        if (!HttpParser.isUserInfo(c)) {
+                            // Strictly there needs to be a check for valid %nn
+                            // encoding here but skip it since it will never be
+                            // decoded because the userinfo is ignored
+                            response.setStatus(400);
+                            setErrorState(ErrorState.CLOSE_CLEAN, null);
+                            if (getLog().isDebugEnabled()) {
+                                getLog().debug(sm.getString("http11processor.request.invalidUserInfo"));
+                            }
+                            break;
+                        }
+                    }
+                    // Skip the '@'
+                    pos = atPos + 1;
+                }
+
+                if (http11) {
+                    // Missing host header is illegal but handled above
+                    if (hostValueMB != null) {
+                        // Any host in the request line must be consistent with
+                        // the Host header
+                        if (!hostValueMB.getByteChunk().equals(
+                                uriB, uriBCStart + pos, slashPos - pos)) {
+                            if (allowHostHeaderMismatch) {
+                                // The requirements of RFC 2616 are being
+                                // applied. If the host header and the request
+                                // line do not agree, the request line takes
+                                // precedence
+                                hostValueMB = headers.setValue("host");
+                                hostValueMB.setBytes(uriB, uriBCStart + pos, slashPos - pos);
+                            } else {
+                                // The requirements of RFC 7230 are being
+                                // applied. If the host header and the request
+                                // line do not agree, trigger a 400 response.
+                                response.setStatus(400);
+                                setErrorState(ErrorState.CLOSE_CLEAN, null);
+                                if (getLog().isDebugEnabled()) {
+                                    getLog().debug(sm.getString("http11processor.request.inconsistentHosts"));
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Not HTTP/1.1 - no Host header so generate one since
+                    // Tomcat internals assume it is set
+                    hostValueMB = headers.setValue("host");
+                    hostValueMB.setBytes(uriB, uriBCStart + pos, slashPos - pos);
+                }
+            } else {
+                response.setStatus(400);
+                setErrorState(ErrorState.CLOSE_CLEAN, null);
+                if (getLog().isDebugEnabled()) {
+                    getLog().debug(sm.getString("http11processor.request.invalidScheme"));
+                }
+            }
+        }
+
+        // Validate the characters in the URI. %nn decoding will be checked at
+        // the point of decoding.
+        for (int i = uriBC.getStart(); i < uriBC.getEnd(); i++) {
+            if (!httpParser.isAbsolutePathRelaxed(uriB[i])) {
+                response.setStatus(400);
+                setErrorState(ErrorState.CLOSE_CLEAN, null);
+                if (getLog().isDebugEnabled()) {
+                    getLog().debug(sm.getString("http11processor.request.invalidUri"));
+                }
+                break;
             }
         }
 
@@ -1377,33 +1533,19 @@ public abstract class AbstractHttp11Processor<S> extends AbstractProcessor<S> {
                 headers.removeHeader("content-length");
                 request.setContentLength(-1);
             } else {
-                getInputBuffer().addActiveFilter
-                        (inputFilters[Constants.IDENTITY_FILTER]);
+                getInputBuffer().addActiveFilter(inputFilters[Constants.IDENTITY_FILTER]);
                 contentDelimitation = true;
             }
         }
 
-        MessageBytes valueMB = headers.getValue("host");
-
-        // Check host header
-        if (http11 && (valueMB == null)) {
-            // 400 - Bad request
-            response.setStatus(400);
-            setErrorState(ErrorState.CLOSE_CLEAN, null);
-            if (getLog().isDebugEnabled()) {
-                getLog().debug(sm.getString("http11processor.request.prepare")+
-                          " host header missing");
-            }
-        }
-
-        parseHost(valueMB);
+        // Validate host name and extract port if present
+        parseHost(hostValueMB);
 
         if (!contentDelimitation) {
             // If there's no content length
             // (broken HTTP/1.0 or HTTP/1.1), assume
             // the client is not broken and didn't send a body
-            getInputBuffer().addActiveFilter
-                    (inputFilters[Constants.VOID_FILTER]);
+            getInputBuffer().addActiveFilter(inputFilters[Constants.VOID_FILTER]);
             contentDelimitation = true;
         }
 
@@ -1445,6 +1587,13 @@ public abstract class AbstractHttp11Processor<S> extends AbstractProcessor<S> {
                 (outputFilters[Constants.VOID_FILTER]);
             entityBody = false;
             contentDelimitation = true;
+            if (statusCode == 205) {
+                // RFC 7231 requires the server to explicitly signal an empty
+                // response in this case
+                response.setContentLength(0);
+            } else {
+                response.setContentLength(-1);
+            }
         }
 
         MessageBytes methodMB = request.method();
@@ -1462,11 +1611,11 @@ public abstract class AbstractHttp11Processor<S> extends AbstractProcessor<S> {
         }
 
         // Check for compression
-        boolean isCompressable = false;
+        boolean isCompressible = false;
         boolean useCompression = false;
         if (entityBody && (compressionLevel > 0) && !sendingWithSendfile) {
-            isCompressable = isCompressable();
-            if (isCompressable) {
+            isCompressible = isCompressible();
+            if (isCompressible) {
                 useCompression = useCompression();
             }
             // Change content-length to -1 to force chunking
@@ -1476,9 +1625,6 @@ public abstract class AbstractHttp11Processor<S> extends AbstractProcessor<S> {
         }
 
         MimeHeaders headers = response.getMimeHeaders();
-        if (!entityBody) {
-            response.setContentLength(-1);
-        }
         // A SC_NO_CONTENT response may include entity headers
         if (entityBody || statusCode == HttpServletResponse.SC_NO_CONTENT) {
             String contentType = response.getContentType();
@@ -1519,7 +1665,7 @@ public abstract class AbstractHttp11Processor<S> extends AbstractProcessor<S> {
             headers.setValue("Content-Encoding").setString("gzip");
         }
         // If it might be compressed, set the Vary header
-        if (isCompressable) {
+        if (isCompressible) {
             // Make Proxies happy via Vary (from mod_deflate)
             MessageBytes vary = headers.getValue("Vary");
             if (vary == null) {
@@ -1599,72 +1745,20 @@ public abstract class AbstractHttp11Processor<S> extends AbstractProcessor<S> {
     protected abstract boolean prepareSendfile(OutputFilter[] outputFilters);
 
     /**
-     * Parse host.
+     * {@inheritDoc}
+     * <p>
+     * This implementation provides the server name from the default host and
+     * the server port from the local port.
      */
-    protected void parseHost(MessageBytes valueMB) {
+    @Override
+    protected void populateHost() {
+        // No host information (HTTP/1.0)
+        // Ensure the local port field is populated before using it.
+        request.action(ActionCode.REQ_LOCALPORT_ATTRIBUTE, request);
+        request.setServerPort(request.getLocalPort());
 
-        if (valueMB == null || valueMB.isNull()) {
-            // HTTP/1.0
-            // If no host header, use the port info from the endpoint
-            // The host will be obtained lazily from the socket if required
-            // using ActionCode#REQ_LOCAL_NAME_ATTRIBUTE
-            request.setServerPort(endpoint.getPort());
-            return;
-        }
-
-        ByteChunk valueBC = valueMB.getByteChunk();
-        byte[] valueB = valueBC.getBytes();
-        int valueL = valueBC.getLength();
-        int valueS = valueBC.getStart();
-        int colonPos = -1;
-        if (hostNameC.length < valueL) {
-            hostNameC = new char[valueL];
-        }
-
-        boolean ipv6 = (valueB[valueS] == '[');
-        boolean bracketClosed = false;
-        for (int i = 0; i < valueL; i++) {
-            char b = (char) valueB[i + valueS];
-            hostNameC[i] = b;
-            if (b == ']') {
-                bracketClosed = true;
-            } else if (b == ':') {
-                if (!ipv6 || bracketClosed) {
-                    colonPos = i;
-                    break;
-                }
-            }
-        }
-
-        if (colonPos < 0) {
-            if (!endpoint.isSSLEnabled()) {
-                // 80 - Default HTTP port
-                request.setServerPort(80);
-            } else {
-                // 443 - Default HTTPS port
-                request.setServerPort(443);
-            }
-            request.serverName().setChars(hostNameC, 0, valueL);
-        } else {
-            request.serverName().setChars(hostNameC, 0, colonPos);
-
-            int port = 0;
-            int mult = 1;
-            for (int i = valueL - 1; i > colonPos; i--) {
-                int charValue = HexUtils.getDec(valueB[i + valueS]);
-                if (charValue == -1 || charValue > 9) {
-                    // Invalid character
-                    // 400 - Bad request
-                    response.setStatus(400);
-                    setErrorState(ErrorState.CLOSE_CLEAN, null);
-                    break;
-                }
-                port = port + (charValue * mult);
-                mult = 10 * mult;
-            }
-            request.setServerPort(port);
-        }
-
+        // request.serverName() will be set to the default host name by the
+        // mapper
     }
 
 

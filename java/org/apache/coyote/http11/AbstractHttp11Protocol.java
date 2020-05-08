@@ -37,6 +37,71 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
     // ------------------------------------------------ HTTP specific properties
     // ------------------------------------------ managed in the ProtocolHandler
 
+    private String relaxedPathChars = null;
+    public String getRelaxedPathChars() {
+        return relaxedPathChars;
+    }
+    public void setRelaxedPathChars(String relaxedPathChars) {
+        this.relaxedPathChars = relaxedPathChars;
+    }
+
+
+    private String relaxedQueryChars = null;
+    public String getRelaxedQueryChars() {
+        return relaxedQueryChars;
+    }
+    public void setRelaxedQueryChars(String relaxedQueryChars) {
+        this.relaxedQueryChars = relaxedQueryChars;
+    }
+
+
+    private boolean allowHostHeaderMismatch = true;
+    /**
+     * Will Tomcat accept an HTTP 1.1 request where the host header does not
+     * agree with the host specified (if any) in the request line?
+     *
+     * @return {@code true} if Tomcat will allow such requests, otherwise
+     *         {@code false}
+     */
+    public boolean getAllowHostHeaderMismatch() {
+        return allowHostHeaderMismatch;
+    }
+    /**
+     * Will Tomcat accept an HTTP 1.1 request where the host header does not
+     * agree with the host specified (if any) in the request line?
+     *
+     * @param allowHostHeaderMismatch {@code true} to allow such requests,
+     *                                {@code false} to reject them with a 400
+     */
+    public void setAllowHostHeaderMismatch(boolean allowHostHeaderMismatch) {
+        this.allowHostHeaderMismatch = allowHostHeaderMismatch;
+    }
+
+
+    private boolean rejectIllegalHeaderName = false;
+    /**
+     * If an HTTP request is received that contains an illegal header name (i.e.
+     * the header name is not a token) will the request be rejected (with a 400
+     * response) or will the illegal header be ignored.
+     *
+     * @return {@code true} if the request will be rejected or {@code false} if
+     *         the header will be ignored
+     */
+    public boolean getRejectIllegalHeaderName() { return rejectIllegalHeaderName; }
+    /**
+     * If an HTTP request is received that contains an illegal header name (i.e.
+     * the header name is not a token) should the request be rejected (with a
+     * 400 response) or should the illegal header be ignored.
+     *
+     * @param rejectIllegalHeaderName   {@code true} to reject requests with
+     *                                  illegal header names, {@code false} to
+     *                                  ignore the header
+     */
+    public void setRejectIllegalHeaderName(boolean rejectIllegalHeaderName) {
+        this.rejectIllegalHeaderName = rejectIllegalHeaderName;
+    }
+
+
     private int socketBuffer = 9000;
     public int getSocketBuffer() { return socketBuffer; }
     public void setSocketBuffer(int socketBuffer) {
@@ -100,16 +165,26 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
     }
 
 
-    private String compressableMimeTypes = "text/html,text/xml,text/plain,text/css,text/javascript,application/javascript";
-    public String getCompressableMimeType() { return compressableMimeTypes; }
+    private String compressibleMimeTypes = "text/html,text/xml,text/plain,text/css,text/javascript,application/javascript";
+    @Deprecated
+    public String getCompressableMimeType() {
+        return getCompressibleMimeType();
+    }
+    @Deprecated
     public void setCompressableMimeType(String valueS) {
-        compressableMimeTypes = valueS;
+        setCompressibleMimeType(valueS);
     }
+    @Deprecated
     public String getCompressableMimeTypes() {
-        return getCompressableMimeType();
+        return getCompressibleMimeType();
     }
+    @Deprecated
     public void setCompressableMimeTypes(String valueS) {
-        setCompressableMimeType(valueS);
+        setCompressibleMimeType(valueS);
+    }
+    public String getCompressibleMimeType() { return compressibleMimeTypes; }
+    public void setCompressibleMimeType(String valueS) {
+        compressibleMimeTypes = valueS;
     }
 
 
@@ -283,11 +358,12 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
         processor.setCompressionMinSize(getCompressionMinSize());
         processor.setCompression(getCompression());
         processor.setNoCompressionUserAgents(getNoCompressionUserAgents());
-        processor.setCompressableMimeTypes(getCompressableMimeTypes());
+        processor.setCompressibleMimeTypes(getCompressibleMimeType());
         processor.setRestrictedUserAgents(getRestrictedUserAgents());
         processor.setSocketBuffer(getSocketBuffer());
         processor.setMaxSavePostSize(getMaxSavePostSize());
         processor.setServer(getServer());
         processor.setMaxCookieCount(getMaxCookieCount());
+        processor.setAllowHostHeaderMismatch(getAllowHostHeaderMismatch());
     }
 }

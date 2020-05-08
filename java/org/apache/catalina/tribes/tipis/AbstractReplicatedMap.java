@@ -60,7 +60,7 @@ public abstract class AbstractReplicatedMap<K,V>
     protected static final StringManager sm =
             StringManager.getManager(AbstractReplicatedMap.class.getPackage().getName());
 
-    private final Log log = LogFactory.getLog(AbstractReplicatedMap.class);
+    private final Log log = LogFactory.getLog(AbstractReplicatedMap.class); // must not be static
 
     /**
      * The default initial capacity - MUST be a power of two.
@@ -277,13 +277,23 @@ public abstract class AbstractReplicatedMap<K,V>
                     MapMessage mapMsg = (MapMessage)resp[i].getMessage();
                     try {
                         mapMsg.deserialize(getExternalLoaders());
+                        Member member = resp[i].getSource();
                         State state = (State) mapMsg.getValue();
                         if (state.isAvailable()) {
-                            memberAlive(resp[i].getSource());
+                            memberAlive(member);
+                        } else if (state == State.STATETRANSFERRED) {
+                            synchronized (mapMembers) {
+                                if (log.isInfoEnabled())
+                                    log.info(sm.getString("abstractReplicatedMap.ping.stateTransferredMember",
+                                            member));
+                                if (mapMembers.containsKey(member) ) {
+                                    mapMembers.put(member, Long.valueOf(System.currentTimeMillis()));
+                                }
+                            }
                         } else {
                             if (log.isInfoEnabled())
                                 log.info(sm.getString("abstractReplicatedMap.mapMember.unavailable",
-                                        resp[i].getSource()));
+                                        member));
                         }
                     } catch (ClassNotFoundException | IOException e) {
                         log.error(sm.getString("abstractReplicatedMap.unable.deserialize.MapMessage"), e);
@@ -409,6 +419,9 @@ public abstract class AbstractReplicatedMap<K,V>
     }
 
     public Member[] getMapMembersExcl(Member[] exclude) {
+        if (exclude == null) {
+            return null;
+        }
         synchronized (mapMembers) {
             @SuppressWarnings("unchecked") // mapMembers has the correct type
             HashMap<Member, Long> list = (HashMap<Member, Long>)mapMembers.clone();
@@ -532,6 +545,7 @@ public abstract class AbstractReplicatedMap<K,V>
         } catch (ClassNotFoundException x) {
             log.error(sm.getString("abstractReplicatedMap.unable.transferState"), x);
         }
+        this.state = State.STATETRANSFERRED;
     }
 
     /**
@@ -754,6 +768,9 @@ public abstract class AbstractReplicatedMap<K,V>
             if (entry != null) {
                 entry.setBackupNodes(mapmsg.getBackupNodes());
                 entry.setPrimary(mapmsg.getPrimary());
+                if (entry.getValue() instanceof ReplicatedMapEntry) {
+                    ((ReplicatedMapEntry) entry.getValue()).accessEntry();
+                }
             }
         }
     }
@@ -904,7 +921,7 @@ public abstract class AbstractReplicatedMap<K,V>
         int node = currentNode++;
         if (node >= size) {
             node = 0;
-            currentNode = 0;
+            currentNode = 1;
         }
         return node;
     }
@@ -1622,8 +1639,9 @@ public abstract class AbstractReplicatedMap<K,V>
         this.accessTimeout = accessTimeout;
     }
 
-    private static enum State {
+    private enum State {
         NEW(false),
+        STATETRANSFERRED(false),
         INITIALIZED(true),
         DESTROYED(false);
 

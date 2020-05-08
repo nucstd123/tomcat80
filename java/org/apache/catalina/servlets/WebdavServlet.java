@@ -30,6 +30,7 @@ import java.util.Stack;
 import java.util.TimeZone;
 import java.util.Vector;
 
+import javax.servlet.DispatcherType;
 import javax.servlet.RequestDispatcher;
 import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
@@ -43,6 +44,7 @@ import org.apache.catalina.WebResource;
 import org.apache.catalina.connector.RequestFacade;
 import org.apache.catalina.util.ConcurrentDateFormat;
 import org.apache.catalina.util.DOMWriter;
+import org.apache.catalina.util.URLEncoder;
 import org.apache.catalina.util.XMLWriter;
 import org.apache.tomcat.util.buf.UDecoder;
 import org.apache.tomcat.util.http.FastHttpDateFormat;
@@ -118,13 +120,21 @@ import org.xml.sax.SAXException;
  *
  * @author Remy Maucherat
  */
-public class WebdavServlet
-    extends DefaultServlet {
+public class WebdavServlet extends DefaultServlet {
 
     private static final long serialVersionUID = 1L;
 
 
     // -------------------------------------------------------------- Constants
+
+    private static final URLEncoder URL_ENCODER_XML;
+    static {
+        URL_ENCODER_XML = (URLEncoder) URLEncoder.DEFAULT.clone();
+        // Remove '&' from the safe character set since while it it permitted
+        // in a URI path, it is not permitted in XML and encoding it is a simple
+        // way to address this.
+        URL_ENCODER_XML.removeSafeCharacter('&');
+    }
 
     private static final String METHOD_PROPFIND = "PROPFIND";
     private static final String METHOD_PROPPATCH = "PROPPATCH";
@@ -302,6 +312,14 @@ public class WebdavServlet
 
         final String path = getRelativePath(req);
 
+        // Error page check needs to come before special path check since
+        // custom error pages are often located below WEB-INF so they are
+        // not directly accessible.
+        if (req.getDispatcherType() == DispatcherType.ERROR) {
+            doGet(req, resp);
+            return;
+        }
+
         // Block access to special subdirectories.
         // DefaultServlet assumes it services resources from the root of the web app
         // and doesn't add any special path protection
@@ -364,6 +382,18 @@ public class WebdavServlet
 
         // TODO : Checking the WebDAV If header
         return true;
+    }
+
+
+    /**
+     * URL rewriter.
+     *
+     * @param path Path which has to be rewritten
+     * @return the rewritten path
+     */
+    @Override
+    protected String rewriteUrl(String path) {
+        return URL_ENCODER_XML.encode(path, "UTF-8");
     }
 
 

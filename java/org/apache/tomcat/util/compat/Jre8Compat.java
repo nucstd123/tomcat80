@@ -25,6 +25,8 @@ import javax.net.ssl.SSLServerSocket;
 
 class Jre8Compat extends JreCompat {
 
+    private static final int RUNTIME_MAJOR_VERSION = 8;
+
     private static final Method getSSLParametersMethod;
     private static final Method setUseCipherSuitesOrderMethod;
     private static final Method setSSLParametersMethod;
@@ -35,9 +37,10 @@ class Jre8Compat extends JreCompat {
         Method m2 = null;
         Method m3 = null;
         try {
-            // Get this class first since it is Java 8+ only
+            // The class is Java6+...
             Class<?> c2 = Class.forName("javax.net.ssl.SSLParameters");
             m1 = SSLServerSocket.class.getMethod("getSSLParameters");
+            // ...but this method is Java8+
             m2 = c2.getMethod("setUseCipherSuitesOrder", boolean.class);
             m3 = SSLServerSocket.class.getMethod("setSSLParameters", c2);
         } catch (SecurityException e) {
@@ -91,5 +94,11 @@ class Jre8Compat extends JreCompat {
         } catch (InvocationTargetException e) {
             throw new UnsupportedOperationException(e);
         }
+    }
+
+
+    @Override
+    public int jarFileRuntimeMajorVersion() {
+        return RUNTIME_MAJOR_VERSION;
     }
 }

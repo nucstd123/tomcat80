@@ -51,7 +51,7 @@ import org.apache.juli.logging.LogFactory;
 public abstract class PersistentManagerBase extends ManagerBase
         implements StoreManager {
 
-    private static final Log log = LogFactory.getLog(PersistentManagerBase.class);
+    private final Log log = LogFactory.getLog(PersistentManagerBase.class); // must not be static
 
     // ---------------------------------------------------- Security Classes
 
@@ -184,6 +184,12 @@ public abstract class PersistentManagerBase extends ManagerBase
      * Sessions currently being swapped in and the associated locks
      */
     private final Map<String,Object> sessionSwapInLocks = new HashMap<>();
+
+    /*
+     * Session that is currently getting swapped in to prevent loading it more
+     * than once concurrently
+     */
+    private final ThreadLocal<Session> sessionToSwapIn = new ThreadLocal<>();
 
 
     // ------------------------------------------------------------- Properties
@@ -707,54 +713,25 @@ public abstract class PersistentManagerBase extends ManagerBase
             session = sessions.get(id);
 
             if (session == null) {
+                Session currentSwapInSession = sessionToSwapIn.get();
                 try {
-                    if (SecurityUtil.isPackageProtectionEnabled()){
-                        try {
-                            session = AccessController.doPrivileged(
-                                    new PrivilegedStoreLoad(id));
-                        } catch (PrivilegedActionException ex) {
-                            Exception e = ex.getException();
-                            log.error(sm.getString(
-                                    "persistentManager.swapInException", id),
-                                    e);
-                            if (e instanceof IOException){
-                                throw (IOException)e;
-                            } else if (e instanceof ClassNotFoundException) {
-                                throw (ClassNotFoundException)e;
-                            }
+                    if (currentSwapInSession == null || !id.equals(currentSwapInSession.getId())) {
+                        session = loadSessionFromStore(id);
+                        sessionToSwapIn.set(session);
+
+                        if (session != null && !session.isValid()) {
+                            log.error(sm.getString("persistentManager.swapInInvalid", id));
+                            session.expire();
+                            removeSession(id);
+                            session = null;
                         }
-                    } else {
-                         session = store.load(id);
+
+                        if (session != null) {
+                            reactivateLoadedSession(id, session);
+                        }
                     }
-                } catch (ClassNotFoundException e) {
-                    String msg = sm.getString(
-                            "persistentManager.deserializeError", id);
-                    log.error(msg, e);
-                    throw new IllegalStateException(msg, e);
-                }
-
-                if (session != null && !session.isValid()) {
-                    log.error(sm.getString(
-                            "persistentManager.swapInInvalid", id));
-                    session.expire();
-                    removeSession(id);
-                    session = null;
-                }
-
-                if (session != null) {
-                    if(log.isDebugEnabled())
-                        log.debug(sm.getString("persistentManager.swapIn", id));
-
-                    session.setManager(this);
-                    // make sure the listeners know about it.
-                    ((StandardSession)session).tellNew();
-                    add(session);
-                    ((StandardSession)session).activate();
-                    // endAccess() to ensure timeouts happen correctly.
-                    // access() to keep access count correct or it will end up
-                    // negative
-                    session.access();
-                    session.endAccess();
+                } finally {
+                    sessionToSwapIn.remove();
                 }
             }
         }
@@ -766,6 +743,56 @@ public abstract class PersistentManagerBase extends ManagerBase
 
         return session;
 
+    }
+
+    private void reactivateLoadedSession(String id, Session session) {
+        if(log.isDebugEnabled())
+            log.debug(sm.getString("persistentManager.swapIn", id));
+
+        session.setManager(this);
+        // make sure the listeners know about it.
+        ((StandardSession)session).tellNew();
+        add(session);
+        ((StandardSession)session).activate();
+        // endAccess() to ensure timeouts happen correctly.
+        // access() to keep access count correct or it will end up
+        // negative
+        session.access();
+        session.endAccess();
+    }
+
+    private Session loadSessionFromStore(String id) throws IOException {
+        try {
+            if (SecurityUtil.isPackageProtectionEnabled()){
+                return securedStoreLoad(id);
+            } else {
+                 return store.load(id);
+            }
+        } catch (ClassNotFoundException e) {
+            String msg = sm.getString(
+                    "persistentManager.deserializeError", id);
+            log.error(msg, e);
+            throw new IllegalStateException(msg, e);
+        }
+    }
+
+
+    private Session securedStoreLoad(String id) throws IOException, ClassNotFoundException {
+        try {
+            return AccessController.doPrivileged(
+                    new PrivilegedStoreLoad(id));
+        } catch (PrivilegedActionException ex) {
+            Exception e = ex.getException();
+            log.error(sm.getString(
+                    "persistentManager.swapInException", id),
+                    e);
+            if (e instanceof IOException){
+                throw (IOException)e;
+            } else if (e instanceof ClassNotFoundException) {
+                throw (ClassNotFoundException)e;
+            }
+        }
+        return null;
     }
 
 
@@ -933,8 +960,9 @@ public abstract class PersistentManagerBase extends ManagerBase
      */
     protected void processMaxActiveSwaps() {
 
-        if (!getState().isAvailable() || getMaxActiveSessions() < 0)
+        if (!getState().isAvailable() || minIdleSwap < 0 || getMaxActiveSessions() < 0) {
             return;
+        }
 
         Session sessions[] = findSessions();
 

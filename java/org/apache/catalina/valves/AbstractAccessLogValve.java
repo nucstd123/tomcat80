@@ -52,7 +52,7 @@ import org.apache.tomcat.util.collections.SynchronizedStack;
  * <p>Abstract implementation of the <b>Valve</b> interface that generates a web
  * server access log with the detailed line contents matching a configurable
  * pattern. The syntax of the available patterns is similar to that supported by
- * the <a href="http://httpd.apache.org/">Apache HTTP Server</a>
+ * the <a href="https://httpd.apache.org/">Apache HTTP Server</a>
  * <code>mod_log_config</code> module.</p>
  *
  * <p>Patterns for the logged message may include constant text or any of the
@@ -95,7 +95,7 @@ import org.apache.tomcat.util.collections.SynchronizedStack;
  * There is also support to write information from the cookie, incoming
  * header, the Session or something else in the ServletRequest.<br>
  * It is modeled after the
- * <a href="http://httpd.apache.org/">Apache HTTP Server</a> log configuration
+ * <a href="https://httpd.apache.org/">Apache HTTP Server</a> log configuration
  * syntax:</p>
  * <ul>
  * <li><code>%{xxx}i</code> for incoming headers
@@ -137,14 +137,14 @@ public abstract class AbstractAccessLogValve extends ValveBase implements Access
     /**
      * The list of our time format types.
      */
-    private static enum FormatType {
+    private enum FormatType {
         CLF, SEC, MSEC, MSEC_FRAC, SDF
     }
 
     /**
      * The list of our port types.
      */
-    private static enum PortType {
+    private enum PortType {
         LOCAL, REMOTE
     }
 

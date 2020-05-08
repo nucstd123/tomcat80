@@ -103,7 +103,7 @@ public abstract class ExpressionFactory {
     public static ExpressionFactory newInstance(Properties properties) {
         ExpressionFactory result = null;
 
-        ClassLoader tccl = Thread.currentThread().getContextClassLoader();
+        ClassLoader tccl = Util.getContextClassLoader();
 
         CacheValue cacheValue;
         Class<?> clazz;
@@ -171,13 +171,14 @@ public abstract class ExpressionFactory {
                 }
             }
             if (constructor == null) {
-                result = (ExpressionFactory) clazz.newInstance();
+                result = (ExpressionFactory) clazz.getDeclaredConstructor().newInstance();
             } else {
                 result =
                     (ExpressionFactory) constructor.newInstance(properties);
             }
 
-        } catch (InstantiationException | IllegalAccessException | IllegalArgumentException e) {
+        } catch (InstantiationException | IllegalAccessException | IllegalArgumentException |
+                NoSuchMethodException e) {
             throw new ELException(
                     "Unable to create ExpressionFactory of type: " + clazz.getName(),
                     e);

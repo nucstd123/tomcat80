@@ -301,7 +301,7 @@ public class ConnectionPool {
             for (int i=proxies.length-1; i>=0; i--) {
                 try {
                     //create a new instance
-                    JdbcInterceptor interceptor = proxies[i].getInterceptorClass().newInstance();
+                    JdbcInterceptor interceptor = proxies[i].getInterceptorClass().getConstructor().newInstance();
                     //configure properties
                     interceptor.setProperties(proxies[i].getProperties());
                     //setup the chain
@@ -326,7 +326,10 @@ public class ConnectionPool {
                 next = next.getNext();
             }
         }
-
+        // setup statement proxy
+        if (getPoolProperties().getUseStatementFacade()) {
+            handler = new StatementFacade(handler);
+        }
         try {
             getProxyConstructor(con.getXAConnection() != null);
             //create the proxy
@@ -410,7 +413,7 @@ public class ConnectionPool {
         PoolProperties.InterceptorDefinition[] proxies = getPoolProperties().getJdbcInterceptorsAsArray();
         for (int i=0; i<proxies.length; i++) {
             try {
-                JdbcInterceptor interceptor = proxies[i].getInterceptorClass().newInstance();
+                JdbcInterceptor interceptor = proxies[i].getInterceptorClass().getConstructor().newInstance();
                 interceptor.setProperties(proxies[i].getProperties());
                 interceptor.poolClosed(this);
             }catch (Exception x) {
@@ -457,7 +460,7 @@ public class ConnectionPool {
                 if (log.isDebugEnabled()) {
                     log.debug("Creating interceptor instance of class:"+proxies[i].getInterceptorClass());
                 }
-                JdbcInterceptor interceptor = proxies[i].getInterceptorClass().newInstance();
+                JdbcInterceptor interceptor = proxies[i].getInterceptorClass().getConstructor().newInstance();
                 interceptor.setProperties(proxies[i].getProperties());
                 interceptor.poolStarted(this);
             }catch (Exception x) {
@@ -918,6 +921,7 @@ public class ConnectionPool {
                 if (busy.remove(con)) {
 
                     if (!shouldClose(con,PooledConnection.VALIDATE_RETURN)) {
+                        con.clearWarnings();
                         con.setStackTrace(null);
                         con.setTimestamp(System.currentTimeMillis());
                         if (((idle.size()>=poolProperties.getMaxIdle()) && !poolProperties.isPoolSweeperEnabled()) || (!idle.offer(con))) {

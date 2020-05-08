@@ -19,9 +19,7 @@ package org.apache.catalina.authenticator;
 import java.io.IOException;
 import java.security.Principal;
 import java.security.cert.X509Certificate;
-import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.Locale;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.Cookie;
@@ -38,10 +36,10 @@ import org.apache.catalina.Realm;
 import org.apache.catalina.Session;
 import org.apache.catalina.TomcatPrincipal;
 import org.apache.catalina.Valve;
-import org.apache.catalina.Wrapper;
 import org.apache.catalina.connector.Request;
 import org.apache.catalina.connector.Response;
 import org.apache.catalina.realm.GenericPrincipal;
+import org.apache.catalina.util.ConcurrentDateFormat;
 import org.apache.catalina.util.SessionIdGeneratorBase;
 import org.apache.catalina.util.StandardSessionIdGenerator;
 import org.apache.catalina.valves.ValveBase;
@@ -51,7 +49,6 @@ import org.apache.juli.logging.LogFactory;
 import org.apache.tomcat.util.ExceptionUtils;
 import org.apache.tomcat.util.descriptor.web.LoginConfig;
 import org.apache.tomcat.util.descriptor.web.SecurityConstraint;
-import org.apache.tomcat.util.http.FastHttpDateFormat;
 import org.apache.tomcat.util.res.StringManager;
 
 
@@ -76,7 +73,7 @@ import org.apache.tomcat.util.res.StringManager;
 public abstract class AuthenticatorBase extends ValveBase
         implements Authenticator {
 
-    private static final Log log = LogFactory.getLog(AuthenticatorBase.class);
+    private final Log log = LogFactory.getLog(AuthenticatorBase.class); // must not be static
 
 
     //------------------------------------------------------ Constructor
@@ -190,9 +187,7 @@ public abstract class AuthenticatorBase extends ValveBase
     /**
      * "Expires" header always set to Date(1), so generate once only
      */
-    private static final String DATE_ONE =
-        (new SimpleDateFormat(FastHttpDateFormat.RFC1123_DATE,
-                              Locale.US)).format(new Date(1));
+    private static final String DATE_ONE = ConcurrentDateFormat.formatRfc1123(new Date(1));
 
 
     protected static String getRealmName(Context context) {
@@ -483,13 +478,6 @@ public abstract class AuthenticatorBase extends ValveBase
                  */
                 return;
             }
-        }
-
-        // The Servlet may specify security constraints through annotations.
-        // Ensure that they have been processed before constraints are checked
-        Wrapper wrapper = request.getMappingData().wrapper;
-        if (wrapper != null) {
-            wrapper.servletSecurityAnnotationScan();
         }
 
         Realm realm = this.context.getRealm();

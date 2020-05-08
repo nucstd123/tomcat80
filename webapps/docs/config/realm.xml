@@ -504,6 +504,12 @@
          the providers default is used.</p>
       </attribute>
 
+      <attribute name="readTimeout" required="false">
+          <p>The timeout, in milliseconds, to use when trying to read from a
+          connection to the directory. If not specified, the default of 5000
+          (5 seconds) is used.</p>
+      </attribute>
+
       <attribute name="referrals" required="false">
         <p>How do we handle JNDI referrals? Allowed values are
         "ignore", "follow", or "throw"  (see javax.naming.Context.REFERRAL
@@ -919,7 +925,7 @@
 
     <p>JAASRealm is prototype for Tomcat of the JAAS-based J2EE authentication
     framework for J2EE v1.4, based on the <a
-    href="http://www.jcp.org/en/jsr/detail?id=196">JCP Specification Request
+    href="https://www.jcp.org/en/jsr/detail?id=196">JCP Specification Request
     196</a> to enhance container-managed security and promote 'pluggable'
     authentication mechanisms whose implementations would be
     container-independent.</p>
@@ -1026,7 +1032,8 @@
     <code>Realm</code> element that defines the CombinedRealm. Authentication
     will be attempted against each <code>Realm</code> in the order they are
     listed. Authentication against any Realm will be sufficient to authenticate
-    the user.</p>
+    the user. The authenticated user, and their associated roles, will be taken
+    from the first Realm that successfully authenticates the user.</p>
 
     <p>See the <a href="../realm-howto.html">Container-Managed Security
     Guide</a> for more information on setting up container managed security

@@ -37,6 +37,7 @@ import javax.servlet.ServletException;
 import org.apache.catalina.Context;
 import org.apache.catalina.Globals;
 import org.apache.catalina.security.SecurityUtil;
+import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
 import org.apache.tomcat.InstanceManager;
 import org.apache.tomcat.util.ExceptionUtils;
@@ -61,8 +62,7 @@ public final class ApplicationFilterConfig implements FilterConfig, Serializable
     static final StringManager sm =
         StringManager.getManager(Constants.Package);
 
-    private static final org.apache.juli.logging.Log log =
-        LogFactory.getLog(ApplicationFilterConfig.class);
+    private final Log log = LogFactory.getLog(ApplicationFilterConfig.class); // must not be static
 
     /**
      * Empty String collection to serve as the basis for empty enumerations.
@@ -90,11 +90,14 @@ public final class ApplicationFilterConfig implements FilterConfig, Serializable
      * @exception ServletException if thrown by the filter's init() method
      * @throws NamingException
      * @throws InvocationTargetException
+     * @throws SecurityException
+     * @throws NoSuchMethodException
+     * @throws IllegalArgumentException
      */
     ApplicationFilterConfig(Context context, FilterDef filterDef)
-        throws ClassCastException, ClassNotFoundException,
-               IllegalAccessException, InstantiationException,
-               ServletException, InvocationTargetException, NamingException {
+            throws ClassCastException, ClassNotFoundException, IllegalAccessException,
+            InstantiationException, ServletException, InvocationTargetException, NamingException,
+            IllegalArgumentException, NoSuchMethodException, SecurityException {
 
         super();
 
@@ -244,10 +247,13 @@ public final class ApplicationFilterConfig implements FilterConfig, Serializable
      * @exception ServletException if thrown by the filter's init() method
      * @throws NamingException
      * @throws InvocationTargetException
+     * @throws SecurityException
+     * @throws NoSuchMethodException
+     * @throws IllegalArgumentException
      */
-    Filter getFilter() throws ClassCastException, ClassNotFoundException,
-        IllegalAccessException, InstantiationException, ServletException,
-        InvocationTargetException, NamingException {
+    Filter getFilter() throws ClassCastException, ClassNotFoundException, IllegalAccessException,
+            InstantiationException, ServletException, InvocationTargetException, NamingException,
+            IllegalArgumentException, NoSuchMethodException, SecurityException {
 
         // Return the existing filter instance, if any
         if (this.filter != null)

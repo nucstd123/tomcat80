@@ -290,9 +290,11 @@ public class Http11AprProtocol extends AbstractHttp11Protocol<Long> {
         @Override
         protected Http11AprProcessor createProcessor() {
             Http11AprProcessor processor = new Http11AprProcessor(
-                    proto.getMaxHttpHeaderSize(), (AprEndpoint)proto.endpoint,
-                    proto.getMaxTrailerSize(), proto.getAllowedTrailerHeadersAsSet(),
-                    proto.getMaxExtensionSize(), proto.getMaxSwallowSize());
+                    proto.getMaxHttpHeaderSize(), proto.getRejectIllegalHeaderName(),
+                    (AprEndpoint)proto.endpoint, proto.getMaxTrailerSize(),
+                    proto.getAllowedTrailerHeadersAsSet(), proto.getMaxExtensionSize(),
+                    proto.getMaxSwallowSize(), proto.getRelaxedPathChars(),
+                    proto.getRelaxedQueryChars());
             proto.configureProcessor(processor);
             // APR specific configuration
             processor.setClientCertProvider(proto.getClientCertProvider());

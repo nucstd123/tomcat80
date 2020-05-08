@@ -48,7 +48,7 @@ import org.apache.tomcat.util.res.StringManager;
  */
 public class AsyncChannelWrapperSecure implements AsyncChannelWrapper {
 
-    private static final Log log =
+    private final Log log =
             LogFactory.getLog(AsyncChannelWrapperSecure.class);
     private static final StringManager sm =
             StringManager.getManager(Constants.PACKAGE_NAME);
@@ -236,6 +236,7 @@ public class AsyncChannelWrapperSecure implements AsyncChannelWrapper {
                             "asyncChannelWrapperSecure.wrongStateWrite")));
                 }
             } catch (Exception e) {
+                writing.set(false);
                 future.fail(e);
             }
         }
@@ -335,6 +336,7 @@ public class AsyncChannelWrapperSecure implements AsyncChannelWrapper {
                             "asyncChannelWrapperSecure.wrongStateRead")));
                 }
             } catch (Exception e) {
+                reading.set(false);
                 future.fail(e);
             }
         }

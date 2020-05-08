@@ -74,7 +74,7 @@ public class WsServerContainer extends WsWebSocketContainer
 
     private static final StringManager sm =
             StringManager.getManager(Constants.PACKAGE_NAME);
-    private static final Log log = LogFactory.getLog(WsServerContainer.class);
+    private final Log log = LogFactory.getLog(WsServerContainer.class); // must not be static
 
     private static final CloseReason AUTHENTICATED_HTTP_SESSION_CLOSED =
             new CloseReason(CloseCodes.VIOLATED_POLICY,
@@ -261,8 +261,8 @@ public class WsServerContainer extends WsWebSocketContainer
         Configurator configurator = null;
         if (!configuratorClazz.equals(Configurator.class)) {
             try {
-                configurator = annotation.configurator().newInstance();
-            } catch (InstantiationException | IllegalAccessException e) {
+                configurator = annotation.configurator().getConstructor().newInstance();
+            } catch (ReflectiveOperationException e) {
                 throw new DeploymentException(sm.getString(
                         "serverContainer.configuratorFail",
                         annotation.configurator().getName(),
@@ -524,8 +524,8 @@ public class WsServerContainer extends WsWebSocketContainer
             @SuppressWarnings("unused")
             Encoder instance;
             try {
-                encoder.newInstance();
-            } catch(InstantiationException | IllegalAccessException e) {
+                encoder.getConstructor().newInstance();
+            } catch(ReflectiveOperationException e) {
                 throw new DeploymentException(sm.getString(
                         "serverContainer.encoderFail", encoder.getName()), e);
             }

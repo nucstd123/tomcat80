@@ -773,6 +773,13 @@ public class CoyoteAdapter implements Adapter {
         int proxyPort = connector.getProxyPort();
         if (proxyPort != 0) {
             req.setServerPort(proxyPort);
+        } else if (req.getServerPort() == -1) {
+            // Not explicitly set. Use default ports based on the scheme
+            if (req.scheme().equals("https")) {
+                req.setServerPort(443);
+            } else {
+                req.setServerPort(80);
+            }
         }
         if (proxyName != null) {
             req.serverName().setString(proxyName);
@@ -1182,15 +1189,17 @@ public class CoyoteAdapter implements Adapter {
                 SSL_ONLY.equals(request.getServletContext()
                         .getEffectiveSessionTrackingModes()) &&
                         request.connector.secure) {
-            request.setRequestedSessionId(
-                    request.getAttribute(SSLSupport.SESSION_ID_KEY).toString());
-            request.setRequestedSessionSSL(true);
+            String sessionId = (String) request.getAttribute(SSLSupport.SESSION_ID_KEY);
+            if (sessionId != null) {
+                request.setRequestedSessionId(sessionId);
+                request.setRequestedSessionSSL(true);
+            }
         }
     }
 
 
     /**
-     * Parse session id in URL.
+     * Parse session id in Cookie.
      */
     protected void parseSessionCookiesId(Request request) {
 

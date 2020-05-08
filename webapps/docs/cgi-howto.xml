@@ -96,6 +96,14 @@ the web application root directory + File.separator + this prefix.
 By default there is no value, which results in the web application root
 directory being used as the search path. The recommended value is
 <code>WEB-INF/cgi</code></li>
+<li><strong>enableCmdLineArguments</strong> - Are command line parameters
+generated from the query string as per section 4.4 of 3875 RFC? The default is
+<code>true</code>.</li>
+<li><strong>environment-variable-</strong> - An environment to be set for the
+execution environment of the CGI script. The name of variable is taken from the
+parameter name. To configure an environment variable named FOO, configure a
+parameter named environment-variable-FOO. The parameter value is used as the
+environment variable value. The default is no environment variables.</li>
 <li><strong>executable</strong> - The name of the executable to be used to
 run the script. You may explicitly set this parameter to be an empty string
 if your script is itself executable (e.g. an exe file). Default is
@@ -121,6 +129,16 @@ the reading of stderr to complete before terminating the CGI process. Default
 is <code>2000</code>.</li>
 </ul>
 
+<p>The CGI script executed depends on the configuration of the CGI Servlet and
+how the request is mapped to the CGI Servlet. The CGI search path starts at the
+web application root directory + File.separator + cgiPathPrefix. The
+<strong>pathInfo</strong> is then searched unless it is <code>null</code> - in
+which case the <strong>servletPath</strong> is searched.</p>
+
+<p>The search starts with the first path segment and expands one path segment
+at a time until no path segments are left (resulting in a 404) or a script is
+found. Any remaining path segments are passed to the script in the
+<strong>PATH_INFO</strong> environment variable.</p>
 
 </section>
 

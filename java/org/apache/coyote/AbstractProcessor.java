@@ -22,6 +22,10 @@ import java.util.concurrent.Executor;
 import javax.servlet.RequestDispatcher;
 
 import org.apache.juli.logging.Log;
+import org.apache.tomcat.util.buf.ByteChunk;
+import org.apache.tomcat.util.buf.MessageBytes;
+import org.apache.tomcat.util.http.parser.Host;
+import org.apache.tomcat.util.log.UserDataHelper;
 import org.apache.tomcat.util.net.AbstractEndpoint;
 import org.apache.tomcat.util.net.AbstractEndpoint.Handler.SocketState;
 import org.apache.tomcat.util.net.SocketStatus;
@@ -35,6 +39,9 @@ import org.apache.tomcat.util.res.StringManager;
 public abstract class AbstractProcessor<S> implements ActionHook, Processor<S> {
 
     protected static final StringManager sm = StringManager.getManager(Constants.Package);
+
+    // Used to avoid useless B2C conversion on the host name.
+    protected char[] hostNameC = new char[0];
 
     protected Adapter adapter;
     protected final AsyncStateMachine asyncStateMachine;
@@ -50,6 +57,7 @@ public abstract class AbstractProcessor<S> implements ActionHook, Processor<S> {
      */
     private ErrorState errorState = ErrorState.NONE;
 
+    protected final UserDataHelper userDataHelper;
 
     /**
      * Intended for use by the Upgrade sub-classes that have no need to
@@ -60,6 +68,7 @@ public abstract class AbstractProcessor<S> implements ActionHook, Processor<S> {
         endpoint = null;
         request = null;
         response = null;
+        userDataHelper = null;
     }
 
     public AbstractProcessor(AbstractEndpoint<S> endpoint) {
@@ -70,6 +79,7 @@ public abstract class AbstractProcessor<S> implements ActionHook, Processor<S> {
         response.setHook(this);
         request.setResponse(response);
         request.setHook(this);
+        userDataHelper = new UserDataHelper(getLog());
     }
 
 
@@ -80,7 +90,10 @@ public abstract class AbstractProcessor<S> implements ActionHook, Processor<S> {
     protected void setErrorState(ErrorState errorState, Throwable t) {
         boolean blockIo = this.errorState.isIoAllowed() && !errorState.isIoAllowed();
         this.errorState = this.errorState.getMostSevere(errorState);
-        if (response.getStatus() < 400) {
+        // Don't change the status code for IOException since that is almost
+        // certainly a client disconnect in which case it is preferable to keep
+        // the original status code http://markmail.org/message/4cxpwmxhtgnrwh7n
+        if (response.getStatus() < 400 && !(t instanceof IOException)) {
             response.setStatus(500);
         }
         if (t != null) {
@@ -92,7 +105,10 @@ public abstract class AbstractProcessor<S> implements ActionHook, Processor<S> {
             // have been completed. Dispatch to a container thread to do the
             // clean-up. Need to do it this way to ensure that all the necessary
             // clean-up is performed.
-            getLog().info(sm.getString("abstractProcessor.nonContainerThreadError"), t);
+            asyncStateMachine.asyncMustError();
+            if (getLog().isDebugEnabled()) {
+                getLog().debug(sm.getString("abstractProcessor.nonContainerThreadError"), t);
+            }
             getEndpoint().processSocket(socketWrapper, SocketStatus.ERROR, true);
         }
     }
@@ -187,6 +203,83 @@ public abstract class AbstractProcessor<S> implements ActionHook, Processor<S> {
 
     @Override
     public abstract boolean isComet();
+
+    protected void parseHost(MessageBytes valueMB) {
+        if (valueMB == null || valueMB.isNull()) {
+            populateHost();
+            return;
+        }
+
+        ByteChunk valueBC = valueMB.getByteChunk();
+        byte[] valueB = valueBC.getBytes();
+        int valueL = valueBC.getLength();
+        int valueS = valueBC.getStart();
+        if (hostNameC.length < valueL) {
+            hostNameC = new char[valueL];
+        }
+
+        try {
+            // Validates the host name
+            int colonPos = Host.parse(valueMB);
+
+            // Extract the port information first, if any
+            if (colonPos != -1) {
+                int port = 0;
+                for (int i = colonPos + 1; i < valueL; i++) {
+                    char c = (char) valueB[i + valueS];
+                    if (c < '0' || c > '9') {
+                        response.setStatus(400);
+                        setErrorState(ErrorState.CLOSE_CLEAN, null);
+                        return;
+                    }
+                    port = port * 10 + c - '0';
+                }
+                request.setServerPort(port);
+
+                // Only need to copy the host name up to the :
+                valueL = colonPos;
+            }
+
+            // Extract the host name
+            for (int i = 0; i < valueL; i++) {
+                hostNameC[i] = (char) valueB[i + valueS];
+            }
+            request.serverName().setChars(hostNameC, 0, valueL);
+
+        } catch (IllegalArgumentException e) {
+            // IllegalArgumentException indicates that the host name is invalid
+            UserDataHelper.Mode logMode = userDataHelper.getNextMode();
+            if (logMode != null) {
+                String message = sm.getString("abstractProcessor.hostInvalid", valueMB.toString());
+                switch (logMode) {
+                    case INFO_THEN_DEBUG:
+                        message += sm.getString("abstractProcessor.fallToDebug");
+                        //$FALL-THROUGH$
+                    case INFO:
+                        getLog().info(message, e);
+                        break;
+                    case DEBUG:
+                        getLog().debug(message, e);
+                }
+            }
+
+            response.setStatus(400);
+            setErrorState(ErrorState.CLOSE_CLEAN, e);
+        }
+    }
+
+
+    /**
+     * Called when a host name is not present in the request (e.g. HTTP/1.0).
+     * It populates the server name and port with appropriate information. The
+     * source is expected to vary by protocol.
+     * <p>
+     * The default implementation is a NO-OP.
+     */
+    protected void populateHost() {
+        // NO-OP
+    }
+
 
     @Override
     public abstract boolean isUpgrade();

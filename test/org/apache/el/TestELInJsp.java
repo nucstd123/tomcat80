@@ -17,7 +17,7 @@
 package org.apache.el;
 
 import java.io.File;
-import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Collections;
 
 import javax.servlet.DispatcherType;
@@ -467,7 +467,7 @@ public class TestELInJsp extends TomcatBaseTest {
         // Could hack something with HttpUtils...
         // No obvious status fields for javax.servlet.jsp
         // Wild card (package) import
-        assertEcho(result, "01-" + BigDecimal.ROUND_UP);
+        assertEcho(result, "01-" + RoundingMode.HALF_UP);
         // Class import
         assertEcho(result, "02-" + Collections.EMPTY_LIST.size());
     }
@@ -507,6 +507,16 @@ public class TestELInJsp extends TomcatBaseTest {
         String result = res.toString();
         assertEcho(result, "01-OK");
         assertEcho(result, "02-OK");
+    }
+
+
+    @Test
+    public void testBug61854a() throws Exception {
+        getTomcatInstanceTestWebapp(true,  true);
+
+        ByteChunk res = getUrl("http://localhost:" + getPort() + "/test/bug6nnnn/bug61854.jsp");
+        String result = res.toString();
+        assertEcho(result, "01-OK");
     }
 
 

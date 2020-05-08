@@ -16,6 +16,7 @@
  */
 package org.apache.tomcat.dbcp.pool2;
 
+import java.io.Closeable;
 import java.util.NoSuchElementException;
 
 /**
@@ -60,7 +61,7 @@ import java.util.NoSuchElementException;
  *
  * @since 2.0
  */
-public interface KeyedObjectPool<K,V> {
+public interface KeyedObjectPool<K,V> extends Closeable {
     /**
      * Obtains an instance from this pool for the specified <code>key</code>.
      * <p>
@@ -173,21 +174,21 @@ public interface KeyedObjectPool<K,V> {
      * @param key the key to query
      * @return the number of instances currently borrowed from but not yet
      * returned to the pool corresponding to the given <code>key</code>.
-=     */
+     */
     int getNumActive(K key);
 
     /**
      * Returns the total number of instances currently idle in this pool.
      * Returns a negative value if this information is not available.
      * @return the total number of instances currently idle in this pool.
- =    */
+     */
     int getNumIdle();
 
     /**
-     * Returns the total number of instances current borrowed from this pool but
+     * Returns the total number of instances currently borrowed from this pool but
      * not yet returned. Returns a negative value if this information is not
      * available.
-     * @return the total number of instances current borrowed from this pool but
+     * @return the total number of instances currently borrowed from this pool but
      * not yet returned.
      */
     int getNumActive();
@@ -224,5 +225,6 @@ public interface KeyedObjectPool<K,V> {
      * <p>
      * Implementations should silently fail if not all resources can be freed.
      */
+    @Override
     void close();
 }

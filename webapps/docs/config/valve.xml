@@ -299,7 +299,7 @@
     headers, cookies, session or request attributes and special
     timestamp formats.
     It is modeled after the
-    <a href="http://httpd.apache.org/">Apache HTTP Server</a> log configuration
+    <a href="https://httpd.apache.org/">Apache HTTP Server</a> log configuration
     syntax. Each of them can be used multiple times with different <code>xxx</code> keys:
     </p>
     <ul>
@@ -350,7 +350,7 @@
     <a href="#Proxies_Support">Proxies Support</a> and the
     <a href="../proxy-howto.html">Proxy How-To</a>. For reverse proxies that
     use mod_jk, see the <a
-    href="http://tomcat.apache.org/connectors-doc/generic_howto/proxy.html">generic
+    href="https://tomcat.apache.org/connectors-doc/generic_howto/proxy.html">generic
     proxy</a> documentation. For other reverse proxies, consult their
     documentation.</p>
   </subsection>
@@ -369,7 +369,7 @@
     difference to the standard <code>AccessLogValve</code> is that
     <code>ExtendedAccessLogValve</code> creates log files which
     conform to the Working Draft for the
-    <a href="http://www.w3.org/TR/WD-logfile.html">Extended Log File Format</a>
+    <a href="https://www.w3.org/TR/WD-logfile.html">Extended Log File Format</a>
     defined by the W3C.</p>
 
   </subsection>
@@ -403,7 +403,7 @@
     <code>cs</code> for "client to server", <code>sc</code> for
     "server to client" or <code>x</code> for "application specific".
     Furthermore some tokens are completed by an additional selector.
-    See the <a href="http://www.w3.org/TR/WD-logfile.html">W3C specification</a>
+    See the <a href="https://www.w3.org/TR/WD-logfile.html">W3C specification</a>
     for more information about the format.</p>
 
     <p>The following format tokens are supported:</p>
@@ -706,7 +706,7 @@
   <subsection name="Introduction">
 
     <p>Tomcat port of
-    <a href="http://httpd.apache.org/docs/trunk/mod/mod_remoteip.html">mod_remoteip</a>,
+    <a href="https://httpd.apache.org/docs/trunk/mod/mod_remoteip.html">mod_remoteip</a>,
     this valve replaces the apparent client remote IP address and hostname for
     the request with the IP address list presented by a proxy or a load balancer
     via a request headers (e.g. &quot;X-Forwarded-For&quot;).</p>
@@ -772,7 +772,7 @@
         Internal proxies that appear in the <strong>remoteIpHeader</strong> will
         be trusted and will not appear in the <strong>proxiesHeader</strong>
         value. If not specified the default value of <code>
-        10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|169\.254\.\d{1,3}\.\d{1,3}|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.1[6-9]{1}\.\d{1,3}\.\d{1,3}|172\.2[0-9]{1}\.\d{1,3}\.\d{1,3}|172\.3[0-1]{1}\.\d{1,3}\.\d{1,3}
+        10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|169\.254\.\d{1,3}\.\d{1,3}|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.1[6-9]{1}\.\d{1,3}\.\d{1,3}|172\.2[0-9]{1}\.\d{1,3}\.\d{1,3}|172\.3[0-1]{1}\.\d{1,3}\.\d{1,3}|0:0:0:0:0:0:0:1
         </code> will be used.</p>
       </attribute>
 
@@ -1014,6 +1014,19 @@
         point where users are authenticated. This is to prevent session fixation
         attacks. If not set, the default value of <code>true</code> will be
         used.</p>
+      </attribute>
+
+      <attribute name="charset" required="false">
+        <p>Controls if the <code>WWW-Authenticate</code> HTTP header includes a
+        <code>charset</code> authentication parameter as per RFC 7617. The only
+        permitted options are <code>null</code>, the empty string and
+        <code>UTF-8</code>. If <code>UTF-8</code> is specified then the
+        <code>charset</code> authentication parameter will be sent with that
+        value and the provided user name and optional password will be converted
+        from bytes to characters using UTF-8. Otherwise, no <code>charset</code>
+        authentication parameter will be sent and the provided user name and
+        optional password will be converted from bytes to characters using
+        ISO-8859-1. The default value is <code>null</code></p>
       </attribute>
 
       <attribute name="className" required="true">
@@ -1651,11 +1664,31 @@
         </p>
       </attribute>
 
+      <attribute name="contextAware" required="false">
+        <p>Flag to use the context name together with the client IP to
+        identify the session to re-use. Can be combined with <code>hostAware</code>.
+        Default value: <code>true</code>
+        </p>
+      </attribute>
+
+      <attribute name="crawlerIps" required="false">
+        <p>Regular expression (using <code>java.util.regex</code>) that client
+        IP is matched against to determine if a request is from a web crawler.
+        By default such regular expression is not set.</p>
+      </attribute>
+
       <attribute name="crawlerUserAgents" required="false">
         <p>Regular expression (using <code>java.util.regex</code>) that the user
         agent HTTP request header is matched against to determine if a request
         is from a web crawler. If not set, the default of
         <code>.*[bB]ot.*|.*Yahoo! Slurp.*|.*Feedfetcher-Google.*</code> is used.</p>
+      </attribute>
+
+      <attribute name="hostAware" required="false">
+        <p>Flag to use the configured host together with the client IP to
+        identify the session to re-use. Can be combined with <code>contextAware</code>.
+        Default value: <code>true</code>
+        </p>
       </attribute>
 
       <attribute name="sessionInactiveInterval" required="false">

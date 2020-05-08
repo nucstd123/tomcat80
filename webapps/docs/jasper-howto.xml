@@ -37,7 +37,7 @@
 <section name="Introduction">
 
 <p>Tomcat <version-major-minor/> uses the Jasper 2 JSP Engine to implement
-the <a href="http://wiki.apache.org/tomcat/Specifications">JavaServer Pages 2.3</a>
+the <a href="https://wiki.apache.org/tomcat/Specifications">JavaServer Pages 2.3</a>
 specification.</p>
 
 <p>Jasper 2 has been redesigned to significantly improve performance over
@@ -98,7 +98,7 @@ classpath is created dynamically based on the current web application.</li>
 <li><strong>compiler</strong> - Which compiler Ant should use to compile JSP
 pages. The valid values for this are the same as for the compiler attribute of
 Ant&apos;s
-<a href="http://ant.apache.org/manual/Tasks/javac.html#compilervalues">javac</a>
+<a href="https://ant.apache.org/manual/Tasks/javac.html#compilervalues">javac</a>
 task. If the value is not set, then the default Eclipse JDT Java compiler will
 be used instead of using Ant. There is no default value. If this attribute is
 set then <code>setenv.[sh|bat]</code> should be used to add
@@ -191,8 +191,9 @@ application. This option is ignored if running under a SecurityManager.</li>
 debugging be suppressed? <code>true</code> or <code>false</code>, default
 <code>false</code>.</li>
 
-<li><strong>trimSpaces</strong> - Should white spaces in template text between
-actions or directives be trimmed ?, default <code>false</code>.</li>
+<li><strong>trimSpaces</strong> - Should template text that consists entirely of
+whitespace be removed? <code>true</code> or <code>false</code>, default
+<code>false</code>.</li>
 
 <li><strong>xpoweredBy</strong> - Determines whether X-Powered-By response
 header is added by generated servlet. <code>true</code> or <code>false</code>,

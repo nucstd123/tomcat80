@@ -26,6 +26,7 @@ import org.apache.coyote.ActionCode;
 import org.apache.coyote.http11.filters.BufferedInputFilter;
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
+import org.apache.tomcat.util.http.parser.HttpParser;
 import org.apache.tomcat.util.net.AbstractEndpoint.Handler.SocketState;
 import org.apache.tomcat.util.net.JIoEndpoint;
 import org.apache.tomcat.util.net.SSLSupport;
@@ -49,12 +50,17 @@ public class Http11Processor extends AbstractHttp11Processor<Socket> {
    // ------------------------------------------------------------ Constructor
 
 
-    public Http11Processor(int headerBufferSize, JIoEndpoint endpoint, int maxTrailerSize,
-            Set<String> allowedTrailerHeaders, int maxExtensionSize, int maxSwallowSize) {
+    public Http11Processor(int headerBufferSize, boolean rejectIllegalHeaderName,
+            JIoEndpoint endpoint, int maxTrailerSize, Set<String> allowedTrailerHeaders,
+            int maxExtensionSize, int maxSwallowSize, String relaxedPathChars,
+            String relaxedQueryChars) {
 
         super(endpoint);
 
-        inputBuffer = new InternalInputBuffer(request, headerBufferSize);
+        httpParser = new HttpParser(relaxedPathChars, relaxedQueryChars);
+
+        inputBuffer = new InternalInputBuffer(request, headerBufferSize, rejectIllegalHeaderName,
+                httpParser);
         request.setInputBuffer(inputBuffer);
 
         outputBuffer = new InternalOutputBuffer(response, headerBufferSize);
@@ -107,7 +113,7 @@ public class Http11Processor extends AbstractHttp11Processor<Socket> {
         // Only calculate a thread ratio when both are >0 to ensure we get a
         // sensible result
         int maxThreads, threadsBusy;
-        if ((maxThreads = endpoint.getMaxThreads()) > 0
+        if ((maxThreads = endpoint.getMaxThreadsWithExecutor()) > 0
                 && (threadsBusy = endpoint.getCurrentThreadsBusy()) > 0) {
             threadRatio = (threadsBusy * 100) / maxThreads;
         }

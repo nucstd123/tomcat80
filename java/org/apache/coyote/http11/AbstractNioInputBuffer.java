@@ -76,12 +76,15 @@ public abstract class AbstractNioInputBuffer<S> extends AbstractInputBuffer<S> {
     /**
      * Alternate constructor.
      */
-    public AbstractNioInputBuffer(Request request, int headerBufferSize) {
+    public AbstractNioInputBuffer(Request request, int headerBufferSize,
+            boolean rejectIllegalHeaderName, HttpParser httpParser) {
 
         this.request = request;
         headers = request.getMimeHeaders();
 
         this.headerBufferSize = headerBufferSize;
+        this.rejectIllegalHeaderName = rejectIllegalHeaderName;
+        this.httpParser = httpParser;
 
         filterLibrary = new InputFilter[0];
         activeFilters = new InputFilter[0];
@@ -279,7 +282,13 @@ public abstract class AbstractNioInputBuffer<S> extends AbstractInputBuffer<S> {
                     end = pos;
                 } else if ((buf[pos] == Constants.QUESTION) && (parsingRequestLineQPos == -1)) {
                     parsingRequestLineQPos = pos;
-                } else if (HttpParser.isNotRequestTarget(buf[pos])) {
+                } else if (parsingRequestLineQPos != -1 && !httpParser.isQueryRelaxed(buf[pos])) {
+                    // %nn decoding will be checked at the point of decoding
+                    throw new IllegalArgumentException(sm.getString("iib.invalidRequestTarget"));
+                } else if (httpParser.isNotRequestTargetRelaxed(buf[pos])) {
+                    // This is a general check that aims to catch problems early
+                    // Detailed checking of each part of the request target will
+                    // happen in AbstractHttp11Processor#prepareRequest()
                     throw new IllegalArgumentException(sm.getString("iib.invalidRequestTarget"));
                 }
                 pos++;
@@ -475,9 +484,10 @@ public abstract class AbstractNioInputBuffer<S> extends AbstractInputBuffer<S> {
                 headerData.lastSignificantChar = pos;
                 break;
             } else if (!HttpParser.isToken(chr)) {
-                // If a non-token header is detected, skip the line and
-                // ignore the header
+                // Non-token characters are illegal in header names
+                // Parsing continues so the error can be reported in context
                 headerData.lastSignificantChar = pos;
+                // skipLine() will handle the error
                 return skipLine();
             }
 
@@ -616,11 +626,14 @@ public abstract class AbstractNioInputBuffer<S> extends AbstractInputBuffer<S> {
 
             pos++;
         }
-        if (getLog().isDebugEnabled()) {
-            getLog().debug(sm.getString("iib.invalidheader", new String(buf,
-                    headerData.start,
+        if (rejectIllegalHeaderName || getLog().isDebugEnabled()) {
+            String message = sm.getString("iib.invalidheader", new String(buf, headerData.start,
                     headerData.lastSignificantChar - headerData.start + 1,
-                    StandardCharsets.ISO_8859_1)));
+                    StandardCharsets.ISO_8859_1));
+            if (rejectIllegalHeaderName) {
+                throw new IllegalArgumentException(message);
+            }
+            getLog().debug(message);
         }
 
         headerParsePos = HeaderParsePosition.HEADER_START;

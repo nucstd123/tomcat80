@@ -26,6 +26,7 @@ import org.apache.coyote.Request;
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
 import org.apache.tomcat.util.buf.ByteChunk;
+import org.apache.tomcat.util.http.parser.HttpParser;
 import org.apache.tomcat.util.net.AbstractEndpoint;
 import org.apache.tomcat.util.net.NioChannel;
 import org.apache.tomcat.util.net.NioEndpoint;
@@ -47,8 +48,9 @@ public class InternalNioInputBuffer extends AbstractNioInputBuffer<NioChannel> {
     /**
      * Alternate constructor.
      */
-    public InternalNioInputBuffer(Request request, int headerBufferSize) {
-        super(request, headerBufferSize);
+    public InternalNioInputBuffer(Request request, int headerBufferSize,
+            boolean rejectIllegalHeaderName, HttpParser httpParser) {
+        super(request, headerBufferSize, rejectIllegalHeaderName, httpParser);
         inputStreamInputBuffer = new SocketInputBuffer();
     }
 
@@ -131,8 +133,7 @@ public class InternalNioInputBuffer extends AbstractNioInputBuffer<NioChannel> {
                     throw new IOException("Key must be cancelled.");
                 }
                 nRead = pool.read(readBuffer,
-                        socket, selector,
-                        socket.getIOChannel().socket().getSoTimeout());
+                        socket, selector, att.getTimeout());
             } catch ( EOFException eof ) {
                 nRead = -1;
             } finally {

@@ -15,7 +15,8 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 -->
-<project name="Tomcat 8.0" default="deploy" basedir=".">
+<project name="Tomcat 8.0" default="deploy" basedir="."
+  xmlns:if="ant:if" xmlns:unless="ant:unless">
 
   <!-- ===================== Initialize Property Values ==================== -->
 
@@ -48,6 +49,8 @@
   <property name="jsp.revision" value="FR" />
   <property name="el.revision" value="FR" />
   <property name="websocket.revision" value="FR" />
+  <!-- MR 2 but this was first 1.2 release so use FR -->
+  <property name="annotation.revision" value="FR" />
 
   <!-- Release artifact base names -->
   <property name="final.name"            value="${project}-${version}" />
@@ -82,6 +85,7 @@
   <!-- Servlet 3.1 spec requires 1.7+ -->
   <property name="compile.source" value="1.7"/>
   <property name="compile.target" value="1.7"/>
+  <property name="compile.release" value="7"/>
 
   <!-- Locations to create the JAR artifacts -->
   <!-- Standard JARs -->
@@ -195,6 +199,12 @@
   <defaultexcludes remove="**/.gitignore" />
   <!--<defaultexcludes echo="true" />-->
 
+  <!-- Java 9 -->
+  <available classname="java.lang.reflect.InaccessibleObjectException"
+             property="java9.add.modules"
+             value="--add-modules java.xml.ws"/>
+  <property name="java9.add.modules" value=""/>
+
   <!-- Classpaths -->
   <path id="compile.classpath">
     <pathelement location="${jdt.jar}"/>
@@ -267,6 +277,7 @@
     <include name="**/*.launch"/>
     <include name="**/*.license"/>
     <include name="**/*.manifest"/>
+    <include name="**/*.md"/>
     <include name="**/*.mdl"/>
     <include name="**/*.MF"/>
     <include name="**/*.notice"/>
@@ -295,9 +306,6 @@
   <!-- Pattern sets for jar files in standard distributions -->
   <patternset id="files.annotations-api">
     <include name="javax/annotation/**" />
-    <include name="javax/ejb/**" />
-    <include name="javax/persistence/**" />
-    <include name="javax/xml/ws/**" />
   </patternset>
 
   <patternset id="files.servlet-api">
@@ -441,7 +449,6 @@
   <!-- Pattern sets for embedded JARs -->
   <!-- Every standard pattern set above should be included in an embedded JAR -->
   <patternset id="files.tomcat-embed-core" >
-    <patternset refid="files.annotations-api" />
     <patternset refid="files.catalina" />
     <patternset refid="files.servlet-api" />
     <patternset refid="files.tomcat-api" />
@@ -455,7 +462,6 @@
     <include name="org/apache/tomcat/jni/**" />
     <include name="org/apache/jk/**" />
     <include name="org/apache/tomcat/util/**" />
-
   </patternset>
 
   <patternset id="files.tomcat-embed-jasper" >
@@ -482,6 +488,9 @@
     <!--<patternset refid="files.catalina-ha" />-->
     <!-- Ant tasks not included in embedded -->
     <!--<patternset refid="files.catalina-ant" />-->
+    <!-- Annotations API is a separate dependency to avoid JRE 9 issues -->
+    <!-- See BZ 61439 -->
+    <!--<patternset refid="files.annotations-api" />-->
 
   <!-- Pattern sets for extras JARs -->
   <patternset id="files.tomcat-extras-ws">
@@ -560,6 +569,7 @@
         <exclude name="output/**"/>
         <exclude name="modules/**"/>
         <exclude name="**/*.mdl"/>
+        <exclude name="**/*.pem"/>
         <exclude name="**/*.svg"/>
         <exclude name="**/*_2.xml"/>
         <exclude name="res/checkstyle/header-al2.txt"/>
@@ -574,6 +584,9 @@
         <exclude name="test/webapp/bug53257/**/*.txt"/>
         <exclude name="test/webapp-fragments/WEB-INF/classes/*.txt"/>
         <exclude name="test/webresources/**"/>
+        <!-- Exclude developer specific local files -->
+        <exclude name="build.properties" />
+        <exclude name="res/maven/mvn.properties" />
       </fileset>
       <fileset dir="modules/jdbc-pool" >
         <exclude name=".*/**"/>
@@ -606,6 +619,7 @@
            deprecation="${compile.deprecation}"
            source="${compile.source}"
            target="${compile.target}"
+           release="${compile.release}"
            excludes="**/.svn/**"
            encoding="ISO-8859-1"
            includeAntRuntime="true" >
@@ -657,6 +671,7 @@
            deprecation="${compile.deprecation}"
            source="${compile.source}"
            target="${compile.target}"
+           release="${compile.release}"
            excludes="**/.svn/**"
            encoding="ISO-8859-1"
            includeAntRuntime="true" >
@@ -680,8 +695,6 @@
 
   </target>
 
-
-
   <target name="build-manifests" unless="manifests.uptodate"
           depends="build-prepare">
     <!-- Filtering tokens for JAR manifests-->
@@ -691,6 +704,7 @@
     <filter token="jsp.revision" value="${jsp.revision}"/>
     <filter token="el.revision" value="${el.revision}"/>
     <filter token="websocket.revision" value="${websocket.revision}"/>
+    <filter token="annotation.revision" value="${annotation.revision}"/>
 
     <mkdir dir="${tomcat.manifests}" />
     <copy todir="${tomcat.manifests}" overwrite="yes" filtering="yes"
@@ -702,7 +716,7 @@
   </target>
 
   <target name="package" depends="compile,build-manifests" >
-    <!-- Common Annotations 1.0 JAR File -->
+    <!-- Common Annotations 1.2 JAR File -->
     <jarIt jarfile="${annotations-api.jar}"
       filesDir="${tomcat.classes}"
       filesId="files.annotations-api"
@@ -880,6 +894,8 @@
     <copy tofile="${tomcat.build}/webapps/docs/RELEASE-NOTES.txt" file="RELEASE-NOTES" encoding="ISO-8859-1">
       <filterset refid="version.filters"/>
     </copy>
+    <copy tofile="${tomcat.build}/webapps/docs/mbeans-descriptors.dtd"
+            file="java/org/apache/tomcat/util/modeler/mbeans-descriptors.dtd" />
 
     <copy   tofile="${tomcat.build}/webapps/docs/appdev/sample/build.xml"
               file="webapps/docs/appdev/build.xml.txt"/>
@@ -995,11 +1011,6 @@
   <target name="deploy" depends="package,build-docs,build-tomcat-jdbc,compile-webapp-examples"
           description="Default. Builds a working Tomcat instance">
 
-    <copy tofile="${tomcat.build}/bin/tomcat-native.tar.gz"
-            file="${tomcat-native.tar.gz}" />
-    <copy tofile="${tomcat.build}/bin/commons-daemon-native.tar.gz"
-            file="${commons-daemon.native.src.tgz}" />
-
     <copy tofile="${tomcat.build}/bin/commons-daemon.jar" file="${commons-daemon.jar}" />
 
     <!-- Copy scripts -->
@@ -1076,6 +1087,7 @@
              debug="${compile.debug}" deprecation="${compile.deprecation}"
              source="${compile.source}"
              target="${compile.target}"
+             release="${compile.release}"
              classpath="${tomcat.classes}"
              excludes="**/CVS/**,**/.svn/**"
              encoding="ISO-8859-1"
@@ -1088,6 +1100,7 @@
              debug="${compile.debug}" deprecation="${compile.deprecation}"
              source="${compile.source}"
              target="${compile.target}"
+             release="${compile.release}"
              classpath="$tomcat.lcasses}"
              excludes="**/CVS/**,**/.svn/**"
              encoding="ISO-8859-1"
@@ -1217,6 +1230,7 @@
     <copy file="${tomcat-dbcp.jar}" todir="${tomcat.embed}"
       failonerror="false"/>
     <copy file="${jdt.jar}" todir="${tomcat.embed}" />
+    <copy file="${annotations-api.jar}" todir="${tomcat.embed}" />
 
     <!-- Note the meta-inf below will work as long as there is only one JAR
          that needs to add entries. If there is more than one a more complex
@@ -1285,8 +1299,8 @@
       <fileset dir="${tomcat.embed}">
         <include name="**" />
         <exclude name="*.asc" />
-        <exclude name="*.md5" />
         <exclude name="*.sha1" />
+        <exclude name="*.sha512" />
         <exclude name="*.zip" />
         <exclude name="*.tar.gz" />
       </fileset>
@@ -1302,8 +1316,8 @@
       <tarfileset dir="${tomcat.embed}" prefix="${final.name}-embed">
         <include name="**" />
         <exclude name="*.asc" />
-        <exclude name="*.md5" />
         <exclude name="*.sha1" />
+        <exclude name="*.sha512" />
         <exclude name="*.zip" />
         <exclude name="*.tar.gz" />
       </tarfileset>
@@ -1320,6 +1334,7 @@
            deprecation="${compile.deprecation}"
            source="${compile.source}"
            target="${compile.target}"
+           release="${compile.release}"
            encoding="ISO-8859-1"
            includeantruntime="true">
       <classpath refid="tomcat.test.classpath" />
@@ -1331,6 +1346,7 @@
         <fileset dir="test">
           <include name="META-INF/**"/>
           <include name="**/service-config.txt"/>
+          <include name="**/logging-non-rotatable.properties"/>
         </fileset>
     </copy>
   </target>
@@ -1479,6 +1495,8 @@
             <exclude name="org/apache/tomcat/util/net/jsse/openssl/**" unless="${test.openssl.exists}" />
             <!-- Exclude performance tests. E.g. on systems with slow/inconsistent timing -->
             <exclude name="**/*Performance.java" if="${test.excludePerformance}" />
+            <!-- Exclude a configurable list of tests -->
+            <exclude name="${test.exclude}" />
           </fileset>
         </batchtest>
       </junit>
@@ -1610,30 +1628,45 @@
       <param name="sourcefile.2" value="${commons-logging-src.loc.2}"/>
       <param name="destfile" value="${commons-logging-src.tar.gz}"/>
       <param name="destdir" value="${commons-logging.home}"/>
+      <param name="checksum.enabled" value="${commons-logging-src.checksum.enabled}"/>
+      <param name="checksum.algorithm" value="${commons-logging-src.checksum.algorithm}"/>
+      <param name="checksum.value" value="${commons-logging-src.checksum.value}"/>
     </antcall>
 
     <antcall target="downloadfile">
       <param name="sourcefile" value="${avalon-framework.loc}"/>
       <param name="destfile" value="${avalon-framework.jar}"/>
       <param name="destdir" value="${avalon-framework.home}"/>
+      <param name="checksum.enabled" value="${avalon-framework.checksum.enabled}"/>
+      <param name="checksum.algorithm" value="${avalon-framework.checksum.algorithm}"/>
+      <param name="checksum.value" value="${avalon-framework.checksum.value}"/>
     </antcall>
 
     <antcall target="downloadfile">
       <param name="sourcefile" value="${log4j.loc}"/>
       <param name="destfile" value="${log4j.jar}"/>
       <param name="destdir" value="${log4j.home}"/>
+      <param name="checksum.enabled" value="${log4j.checksum.enabled}"/>
+      <param name="checksum.algorithm" value="${log4j.checksum.algorithm}"/>
+      <param name="checksum.value" value="${log4j.checksum.value}"/>
     </antcall>
 
     <antcall target="downloadfile">
       <param name="sourcefile" value="${logkit.loc}"/>
       <param name="destfile" value="${logkit.jar}"/>
       <param name="destdir" value="${logkit.home}"/>
+      <param name="checksum.enabled" value="${logkit.checksum.enabled}"/>
+      <param name="checksum.algorithm" value="${logkit.checksum.algorithm}"/>
+      <param name="checksum.value" value="${logkit.checksum.value}"/>
     </antcall>
 
     <antcall target="downloadfile">
       <param name="sourcefile" value="${servletapi.loc}"/>
       <param name="destfile" value="${servletapi.jar}"/>
       <param name="destdir" value="${servletapi.home}"/>
+      <param name="checksum.enabled" value="${servletapi.checksum.enabled}"/>
+      <param name="checksum.algorithm" value="${servletapi.checksum.algorithm}"/>
+      <param name="checksum.value" value="${servletapi.checksum.value}"/>
     </antcall>
 
   </target>
@@ -1748,12 +1781,18 @@
       <param name="sourcefile" value="${jaxrpc-lib.loc}"/>
       <param name="destfile" value="${jaxrpc-lib.jar}"/>
       <param name="destdir" value="${jaxrpc-lib.home}"/>
+      <param name="checksum.enabled" value="${jaxrpc-lib.checksum.enabled}"/>
+      <param name="checksum.algorithm" value="${jaxrpc-lib.checksum.algorithm}"/>
+      <param name="checksum.value" value="${jaxrpc-lib.checksum.value}"/>
     </antcall>
 
     <antcall target="downloadfile">
       <param name="sourcefile" value="${wsdl4j-lib.loc}"/>
       <param name="destfile" value="${wsdl4j-lib.jar}"/>
       <param name="destdir" value="${wsdl4j-lib.home}"/>
+      <param name="checksum.enabled" value="${wsdl4j-lib.checksum.enabled}"/>
+      <param name="checksum.algorithm" value="${wsdl4j-lib.checksum.algorithm}"/>
+      <param name="checksum.value" value="${wsdl4j-lib.checksum.value}"/>
     </antcall>
 
     <copy file="${jaxrpc-lib.jar}"
@@ -1771,6 +1810,8 @@
            debug="${compile.debug}"
            deprecation="${compile.deprecation}"
            source="${compile.source}"
+           target="${compile.target}"
+           release="${compile.release}"
            encoding="ISO-8859-1"
            includeantruntime="false">
       <classpath refid="tomcat.webservices.classpath" />
@@ -1928,6 +1969,12 @@
       </fileset>
     </copy>
 
+    <!-- Source bundles for native components -->
+    <copy tofile="${tomcat.dist}/bin/tomcat-native.tar.gz"
+            file="${tomcat-native.tar.gz}" />
+    <copy tofile="${tomcat.dist}/bin/commons-daemon-native.tar.gz"
+            file="${commons-daemon.native.src.tgz}" />
+
     <!-- platform README files -->
     <echo append="false" file="${tomcat.dist}/bin/x64/README">
 Apache Tomcat ${version} native binaries for Win64 AMD64/EMT64 platform.
@@ -2028,7 +2075,7 @@ Apache Tomcat ${version} native binaries for Win64 AMD64/EMT64 platform.
       encoding="UTF-8"
       docencoding="UTF-8"
       charset="UTF-8"
-      additionalparam="-breakiterator -notimestamp"
+      additionalparam="-breakiterator -notimestamp ${java9.add.modules}"
       maxmemory="512m"
       failonerror="true">
       <classpath>
@@ -2041,7 +2088,7 @@ Apache Tomcat ${version} native binaries for Win64 AMD64/EMT64 platform.
       <link href="../elapi"/>
       <link href="../websocketapi"/>
       <link href="http://docs.oracle.com/javase/7/docs/api/"/>
-      <link href="http://commons.apache.org/proper/commons-io/javadocs/api-release/"/>
+      <link href="https://commons.apache.org/proper/commons-io/javadocs/api-release/"/>
       <link href="http://docs.oracle.com/javaee/7/api/"/>
       <sourcepath>
         <path location="${tomcat.dist}/src/java"/>
@@ -2189,7 +2236,6 @@ skip.installer property in build.properties" />
   </target>
 
   <target name="-installer-prep"
-      description="Prepares file structure required to build installer"
       unless="skip.installer" depends="dist-static,-installer-init">
     <copy todir="${tomcat.dist}">
       <fileset dir="res">
@@ -2202,6 +2248,8 @@ skip.installer property in build.properties" />
     <copy file="${nsis.installoptions.dll}" todir="${tomcat.dist}" />
     <copy file="${nsis.nsexec.dll}" todir="${tomcat.dist}" />
     <copy file="${nsis.nsisdl.dll}" todir="${tomcat.dist}" />
+    <copy file="${nsis.system.dll}" todir="${tomcat.dist}" />
+    <copy file="${nsis.nsdialogs.dll}" todir="${tomcat.dist}" />
     <copy file="res/tomcat.nsi" tofile="${tomcat.dist}/tomcat.nsi" overwrite="true" encoding="ISO-8859-1">
       <filterset refid="version.filters"/>
     </copy>
@@ -2212,7 +2260,6 @@ skip.installer property in build.properties" />
   </target>
 
   <target name="-installer-create-tempinstaller"
-      description="Creates the temporary installer"
       unless="skip.installer" depends="-installer-prep">
     <exec dir="${tomcat.dist}" executable="${nsis.exe}" osfamily="windows">
       <arg value="/DUNINSTALLONLY" />
@@ -2230,7 +2277,6 @@ skip.installer property in build.properties" />
   </target>
 
   <target name="-installer-create-uninstaller"
-      description="Execute the temporary installer to create the uninstaller"
       unless="skip.installer" depends="-installer-create-tempinstaller">
     <!-- Execute the temporary installer to create the uninstaller -->
     <exec dir="${tomcat.dist}" executable="${tomcat.dist}/tempinstaller.exe"
@@ -2242,7 +2288,6 @@ skip.installer property in build.properties" />
   </target>
 
   <target name="-installer-sign-uninstaller"
-      description="Sign the uninstaller executable"
       unless="skip.installer" depends="-installer-create-uninstaller"
       if="${do.codesigning}">
     <taskdef name="signcode"
@@ -2250,6 +2295,8 @@ skip.installer property in build.properties" />
         classpath="${tomcat.classes}" />
     <signcode userName="${codesigning.user}" password="${codesigning.pwd}"
         partnerCode="${codesigning.partnercode}"
+        keyStore="${codesigning.keyStore}"
+        keyStorePassword="${codesigning.keyStorePassword}"
         applicationName="Apache Tomcat ${version.major.minor} Uninstaller"
         applicationversion="${version}"
         signingService="${codesigning.service}">
@@ -2259,8 +2306,8 @@ skip.installer property in build.properties" />
     </signcode>
   </target>
 
-  <target name="-installer" description="Builds Windows installer"
-      unless="skip.installer" depends="-installer-sign-uninstaller">
+  <target name="-installer" unless="skip.installer"
+      depends="-installer-sign-uninstaller">
     <exec dir="${tomcat.dist}" executable="${nsis.exe}" osfamily="windows">
       <arg value="/DNSISDIR=${nsis.home}" />
       <arg value="/V2" />
@@ -2276,12 +2323,16 @@ skip.installer property in build.properties" />
     <hashAndSign file="${tomcat.release}/v${version}/bin/${final.name}.exe" />
   </target>
 
-  <target name="installer-sign" depends="-installer" if="${do.codesigning}" >
+  <target name="installer-sign"
+      description="Builds and optionally signs the Windows installer"
+      depends="-installer" if="${do.codesigning}" >
     <taskdef name="signcode"
         classname="org.apache.tomcat.buildutil.SignCode"
         classpath="${tomcat.classes}" />
     <signcode userName="${codesigning.user}" password="${codesigning.pwd}"
               partnerCode="${codesigning.partnercode}"
+              keyStore="${codesigning.keyStore}"
+              keyStorePassword="${codesigning.keyStorePassword}"
               applicationName="Apache Tomcat ${version.major.minor}"
               applicationversion="${version}"
               signingService="${codesigning.service}">
@@ -2291,8 +2342,8 @@ skip.installer property in build.properties" />
     </signcode>
     <!-- .exe has changed so need to redo checksums and OpenPGP signature -->
     <delete file="${tomcat.release}/v${version}/bin/${final.name}.exe.asc" />
-    <delete file="${tomcat.release}/v${version}/bin/${final.name}.exe.md5" />
     <delete file="${tomcat.release}/v${version}/bin/${final.name}.exe.sha1" />
+    <delete file="${tomcat.release}/v${version}/bin/${final.name}.exe.sha512" />
     <hashAndSign file="${tomcat.release}/v${version}/bin/${final.name}.exe" />
   </target>
 
@@ -2331,8 +2382,8 @@ skip.installer property in build.properties" />
         <include name="*.zip"/>
         <include name="*.tar.gz"/>
         <include name="*.asc"/>
-        <include name="*.md5"/>
         <include name="*.sha1"/>
+        <include name="*.sha512"/>
       </fileset>
     </copy>
 
@@ -2616,7 +2667,7 @@ skip.installer property in build.properties" />
 
     <mkdir dir="${tomcat.src.jars}" />
 
-    <!-- Common Annotations 1.0 JAR File -->
+    <!-- Common Annotations 1.2 JAR File -->
     <jarIt jarfile="${annotations-api-src.jar}"
       filesDir="java"
       filesId="files.annotations-api"
@@ -2762,6 +2813,9 @@ skip.installer property in build.properties" />
       <param name="sourcefile" value="${checkstyle.loc}"/>
       <param name="destfile" value="${checkstyle.jar}"/>
       <param name="destdir" value="${base.path}"/>
+      <param name="checksum.enabled" value="${checkstyle.checksum.enabled}"/>
+      <param name="checksum.algorithm" value="${checkstyle.checksum.algorithm}"/>
+      <param name="checksum.value" value="${checkstyle.checksum.value}"/>
     </antcall>
 
   </target>
@@ -2769,25 +2823,14 @@ skip.installer property in build.properties" />
   <target name="download-compile"
           description="Download (and build) components necessary to compile" >
 
-    <antcall target="downloadfile-2">
-      <param name="sourcefile.1" value="${tomcat-native.loc.1}"/>
-      <param name="sourcefile.2" value="${tomcat-native.loc.2}"/>
-      <param name="destfile" value="${tomcat-native.tar.gz}"/>
-      <param name="destdir" value="${tomcat-native.home}"/>
-    </antcall>
-
     <!-- Download Commons Daemon -->
     <antcall target="downloadgz-2">
       <param name="sourcefile.1" value="${commons-daemon.bin.loc.1}"/>
       <param name="sourcefile.2" value="${commons-daemon.bin.loc.2}"/>
       <param name="destfile" value="${commons-daemon.jar}"/>
-    </antcall>
-
-    <antcall target="downloadfile-2">
-      <param name="sourcefile.1" value="${commons-daemon.native.src.loc.1}"/>
-      <param name="sourcefile.2" value="${commons-daemon.native.src.loc.2}"/>
-      <param name="destfile" value="${commons-daemon.native.src.tgz}"/>
-      <param name="destdir" value="${commons-daemon.home}"/>
+      <param name="checksum.enabled" value="${commons-daemon.bin.checksum.enabled}"/>
+      <param name="checksum.algorithm" value="${commons-daemon.bin.checksum.algorithm}"/>
+      <param name="checksum.value" value="${commons-daemon.bin.checksum.value}"/>
     </antcall>
 
     <!-- Download JDT (Eclipse compiler) -->
@@ -2796,6 +2839,9 @@ skip.installer property in build.properties" />
       <param name="sourcefile.2" value="${jdt.loc.2}"/>
       <param name="destfile" value="${jdt.jar}"/>
       <param name="destdir" value="${jdt.home}"/>
+      <param name="checksum.enabled" value="${jdt.checksum.enabled}"/>
+      <param name="checksum.algorithm" value="${jdt.checksum.algorithm}"/>
+      <param name="checksum.value" value="${jdt.checksum.value}"/>
     </antcall>
 
   </target>
@@ -2807,30 +2853,45 @@ skip.installer property in build.properties" />
       <param name="sourcefile" value="${junit.loc}"/>
       <param name="destfile" value="${junit.jar}"/>
       <param name="destdir" value="${junit.home}"/>
+      <param name="checksum.enabled" value="${junit.checksum.enabled}"/>
+      <param name="checksum.algorithm" value="${junit.checksum.algorithm}"/>
+      <param name="checksum.value" value="${junit.checksum.value}"/>
     </antcall>
 
     <antcall target="downloadfile">
       <param name="sourcefile" value="${hamcrest.loc}"/>
       <param name="destfile" value="${hamcrest.jar}"/>
       <param name="destdir" value="${hamcrest.home}"/>
+      <param name="checksum.enabled" value="${hamcrest.checksum.enabled}"/>
+      <param name="checksum.algorithm" value="${hamcrest.checksum.algorithm}"/>
+      <param name="checksum.value" value="${hamcrest.checksum.value}"/>
     </antcall>
 
     <antcall target="downloadzip">
       <param name="sourcefile" value="${easymock.loc}"/>
       <param name="destfile" value="${easymock.jar}"/>
       <param name="destdir" value="${base.path}"/>
+      <param name="checksum.enabled" value="${easymock.checksum.enabled}"/>
+      <param name="checksum.algorithm" value="${easymock.checksum.algorithm}"/>
+      <param name="checksum.value" value="${easymock.checksum.value}"/>
     </antcall>
 
     <antcall target="downloadfile">
       <param name="sourcefile" value="${cglib.loc}"/>
       <param name="destfile" value="${cglib.jar}"/>
       <param name="destdir" value="${cglib.home}"/>
+      <param name="checksum.enabled" value="${cglib.checksum.enabled}"/>
+      <param name="checksum.algorithm" value="${cglib.checksum.algorithm}"/>
+      <param name="checksum.value" value="${cglib.checksum.value}"/>
     </antcall>
 
     <antcall target="downloadzip">
       <param name="sourcefile" value="${objenesis.loc}"/>
       <param name="destfile" value="${objenesis.jar}"/>
       <param name="destdir" value="${base.path}"/>
+      <param name="checksum.enabled" value="${objenesis.checksum.enabled}"/>
+      <param name="checksum.algorithm" value="${objenesis.checksum.algorithm}"/>
+      <param name="checksum.value" value="${objenesis.checksum.value}"/>
     </antcall>
 
   </target>
@@ -2842,6 +2903,9 @@ skip.installer property in build.properties" />
     <antcall target="downloadgz">
       <param name="sourcefile" value="${cobertura.loc}"/>
       <param name="destfile" value="${cobertura.jar}"/>
+      <param name="checksum.enabled" value="${cobertura.checksum.enabled}"/>
+      <param name="checksum.algorithm" value="${cobertura.checksum.algorithm}"/>
+      <param name="checksum.value" value="${cobertura.checksum.value}"/>
     </antcall>
 
   </target>
@@ -2853,6 +2917,9 @@ skip.installer property in build.properties" />
     <antcall target="downloadgz">
       <param name="sourcefile" value="${findbugs.loc}"/>
       <param name="destfile" value="${findbugs.jar}"/>
+      <param name="checksum.enabled" value="${findbugs.checksum.enabled}"/>
+      <param name="checksum.algorithm" value="${findbugs.checksum.algorithm}"/>
+      <param name="checksum.value" value="${findbugs.checksum.value}"/>
     </antcall>
 
   </target>
@@ -2860,11 +2927,34 @@ skip.installer property in build.properties" />
   <target name="download-dist"
           description="Download additional components for a distribution" >
 
+    <antcall target="downloadfile-2">
+      <param name="sourcefile.1" value="${tomcat-native.loc.1}"/>
+      <param name="sourcefile.2" value="${tomcat-native.loc.2}"/>
+      <param name="destfile" value="${tomcat-native.tar.gz}"/>
+      <param name="destdir" value="${tomcat-native.home}"/>
+      <param name="checksum.enabled" value="${tomcat-native.src.checksum.enabled}"/>
+      <param name="checksum.algorithm" value="${tomcat-native.src.checksum.algorithm}"/>
+      <param name="checksum.value" value="${tomcat-native.src.checksum.value}"/>
+    </antcall>
+
     <antcall target="downloadzip-2">
       <param name="sourcefile.1" value="${tomcat-native.win.1}"/>
       <param name="sourcefile.2" value="${tomcat-native.win.2}"/>
       <param name="destfile" value="${tomcat-native.home}/LICENSE"/>
       <param name="destdir" value="${tomcat-native.home}"/>
+      <param name="checksum.enabled" value="${tomcat-native.win.checksum.enabled}"/>
+      <param name="checksum.algorithm" value="${tomcat-native.win.checksum.algorithm}"/>
+      <param name="checksum.value" value="${tomcat-native.win.checksum.value}"/>
+    </antcall>
+
+    <antcall target="downloadfile-2">
+      <param name="sourcefile.1" value="${commons-daemon.native.src.loc.1}"/>
+      <param name="sourcefile.2" value="${commons-daemon.native.src.loc.2}"/>
+      <param name="destfile" value="${commons-daemon.native.src.tgz}"/>
+      <param name="destdir" value="${commons-daemon.home}"/>
+      <param name="checksum.enabled" value="${commons-daemon.native.src.checksum.enabled}"/>
+      <param name="checksum.algorithm" value="${commons-daemon.native.src.checksum.algorithm}"/>
+      <param name="checksum.value" value="${commons-daemon.native.src.checksum.value}"/>
     </antcall>
 
     <antcall target="downloadzip-2">
@@ -2872,12 +2962,18 @@ skip.installer property in build.properties" />
       <param name="sourcefile.2" value="${commons-daemon.native.win.loc.2}"/>
       <param name="destfile" value="${commons-daemon.native.win.mgr.exe}"/>
       <param name="destdir" value="${commons-daemon.native.win.home}"/>
+      <param name="checksum.enabled" value="${commons-daemon.native.win.checksum.enabled}"/>
+      <param name="checksum.algorithm" value="${commons-daemon.native.win.checksum.algorithm}"/>
+      <param name="checksum.value" value="${commons-daemon.native.win.checksum.value}"/>
     </antcall>
 
     <antcall target="downloadzip">
       <param name="sourcefile" value="${nsis.loc}"/>
       <param name="destfile" value="${nsis.exe}"/>
       <param name="destdir" value="${nsis.home}/.."/>
+      <param name="checksum.enabled" value="${nsis.checksum.enabled}"/>
+      <param name="checksum.algorithm" value="${nsis.checksum.algorithm}"/>
+      <param name="checksum.value" value="${nsis.checksum.value}"/>
     </antcall>
 
   </target>
@@ -2895,12 +2991,134 @@ skip.installer property in build.properties" />
     <available file="${destfile}" property="exist"/>
   </target>
 
+  <macrodef name="verifyChecksum">
+    <attribute name="file" />
+    <attribute name="name" default="@{file}"/>
+    <attribute name="enabled" />
+    <attribute name="algorithm" />
+    <attribute name="value" />
+    <sequential>
+      <local name="name" />
+      <basename property="name" file="@{name}" />
+      <sequential if:true="@{enabled}">
+        <local name="check.md5" />
+        <local name="check.sha1" />
+        <local name="check.sha256" />
+        <local name="check.sha384" />
+        <local name="check.sha512" />
+        <local name="value.md5" />
+        <local name="value.sha1" />
+        <local name="value.sha256" />
+        <local name="value.sha384" />
+        <local name="value.sha512" />
+        <local name="check.success" />
+        <condition property="check.md5">
+          <or>
+            <equals arg1="@{algorithm}" arg2="MD5" />
+            <equals arg1="@{algorithm}" arg2="MD5|SHA-1" />
+          </or>
+        </condition>
+        <condition property="check.sha1">
+          <or>
+            <equals arg1="@{algorithm}" arg2="SHA-1" />
+            <equals arg1="@{algorithm}" arg2="MD5|SHA-1" />
+          </or>
+        </condition>
+        <condition property="check.sha256">
+          <equals arg1="@{algorithm}" arg2="SHA-256" />
+        </condition>
+        <condition property="check.sha384">
+          <equals arg1="@{algorithm}" arg2="SHA-384" />
+        </condition>
+        <condition property="check.sha512">
+          <equals arg1="@{algorithm}" arg2="SHA-512" />
+        </condition>
+        <!-- Check that any checksum algorithm is selected -->
+        <fail message="Unknown algorithm: @{algorithm}">
+          <condition>
+            <not>
+              <or>
+                <equals arg1="${check.md5}" arg2="true" />
+                <equals arg1="${check.sha1}" arg2="true" />
+                <equals arg1="${check.sha256}" arg2="true" />
+                <equals arg1="${check.sha384}" arg2="true" />
+                <equals arg1="${check.sha512}" arg2="true" />
+              </or>
+            </not>
+          </condition>
+        </fail>
+        <!-- Calculate requested checksums -->
+        <checksum file="@{file}" if:true="${check.md5}" property="value.md5" algorithm="MD5" />
+        <checksum file="@{file}" if:true="${check.sha1}" property="value.sha1" algorithm="SHA-1" />
+        <checksum file="@{file}" if:true="${check.sha256}" property="value.sha256" algorithm="SHA-256" />
+        <checksum file="@{file}" if:true="${check.sha384}" property="value.sha384" algorithm="SHA-384" />
+        <checksum file="@{file}" if:true="${check.sha512}" property="value.sha512" algorithm="SHA-512" />
+        <!-- Check actual checksum value -->
+        <condition property="check.success">
+          <or>
+            <and>
+              <equals arg1="@{algorithm}" arg2="MD5" />
+              <equals arg1="@{value}" arg2="${value.md5}" />
+            </and>
+            <and>
+              <equals arg1="@{algorithm}" arg2="SHA-1" />
+              <equals arg1="@{value}" arg2="${value.sha1}" />
+            </and>
+            <and>
+              <equals arg1="@{algorithm}" arg2="MD5|SHA-1" />
+              <equals arg1="@{value}" arg2="${value.md5}|${value.sha1}" />
+            </and>
+            <and>
+              <equals arg1="@{algorithm}" arg2="SHA-256" />
+              <equals arg1="@{value}" arg2="${value.sha256}" />
+            </and>
+            <and>
+              <equals arg1="@{algorithm}" arg2="SHA-384" />
+              <equals arg1="@{value}" arg2="${value.sha384}" />
+            </and>
+            <and>
+              <equals arg1="@{algorithm}" arg2="SHA-512" />
+              <equals arg1="@{value}" arg2="${value.sha512}" />
+            </and>
+          </or>
+        </condition>
+        <!-- Fail or display a success message -->
+        <sequential unless:true="${check.success}">
+          <!-- Generate checksums for an error message -->
+          <checksum file="@{file}" unless:set="value.md5" property="value.md5" algorithm="MD5" />
+          <checksum file="@{file}" unless:set="value.sha1" property="value.sha1" algorithm="SHA-1" />
+          <checksum file="@{file}" unless:set="value.sha256" property="value.sha256" algorithm="SHA-256" />
+          <checksum file="@{file}" unless:set="value.sha384" property="value.sha384" algorithm="SHA-384" />
+          <checksum file="@{file}" unless:set="value.sha512" property="value.sha512" algorithm="SHA-512" />
+          <fail>
+  Checksum check failure for ${name} (@{file}).
+  Algorithm: @{algorithm}
+  Expected value: @{value}
+  Actual values:
+  SHA-512: ${value.sha512}
+  SHA-384: ${value.sha384}
+  SHA-256: ${value.sha256}
+  SHA-1: ${value.sha1}
+  MD5: ${value.md5}
+          </fail>
+        </sequential>
+        <echo level="info" message="Checksum check for ${name}, algorithm @{algorithm}: OK" />
+      </sequential>
+      <echo unless:true="@{enabled}" message="WARNING: Checksum verification is disabled for ${name}"/>
+    </sequential>
+  </macrodef>
+
   <target name="downloadgz" unless="exist" depends="testexist,setproxy">
     <!-- Download and extract the package -->
     <local name="temp.file"/>
     <mkdir dir="${base.path}"/>
     <tempfile property="temp.file" destdir="${base.path}" prefix="download-"/>
     <get src="${sourcefile}" httpusecaches="${trydownload.httpusecaches}" dest="${temp.file}.tar.gz" />
+    <verifyChecksum
+      enabled="${checksum.enabled}"
+      algorithm="${checksum.algorithm}" value="${checksum.value}"
+      file="${temp.file}.tar.gz" name="${sourcefile}" />
+
     <gunzip src="${temp.file}.tar.gz" dest="${temp.file}.tar"/>
     <untar src="${temp.file}.tar" dest="${base.path}"/>
     <delete file="${temp.file}.tar"/>
@@ -2920,6 +3138,12 @@ skip.installer property in build.properties" />
       <param name="sourcefile" value="${sourcefile.2}" />
       <param name="destfile" value="${temp.file}.tar.gz" />
     </antcall>
+
+    <verifyChecksum
+      enabled="${checksum.enabled}"
+      algorithm="${checksum.algorithm}" value="${checksum.value}"
+      file="${temp.file}.tar.gz" name="${sourcefile.1}" />
+
     <gunzip src="${temp.file}.tar.gz" dest="${temp.file}.tar"/>
     <untar src="${temp.file}.tar" dest="${base.path}"/>
     <delete file="${temp.file}.tar"/>
@@ -2932,6 +3156,11 @@ skip.installer property in build.properties" />
     <mkdir dir="${base.path}"/>
     <tempfile property="temp.file" destdir="${base.path}" prefix="download-" suffix=".zip"/>
     <get src="${sourcefile}" httpusecaches="${trydownload.httpusecaches}" dest="${temp.file}"/>
+    <verifyChecksum
+      enabled="${checksum.enabled}"
+      algorithm="${checksum.algorithm}" value="${checksum.value}"
+      file="${temp.file}" name="${sourcefile}" />
+
     <mkdir dir="${destdir}"/>
     <unzip src="${temp.file}" dest="${destdir}"/>
     <delete file="${temp.file}"/>
@@ -2950,6 +3179,12 @@ skip.installer property in build.properties" />
       <param name="sourcefile" value="${sourcefile.2}" />
       <param name="destfile" value="${temp.file}" />
     </antcall>
+
+    <verifyChecksum
+      enabled="${checksum.enabled}"
+      algorithm="${checksum.algorithm}" value="${checksum.value}"
+      file="${temp.file}" name="${sourcefile.1}" />
+
     <mkdir dir="${destdir}" />
     <unzip src="${temp.file}" dest="${destdir}"/>
     <delete file="${temp.file}"/>
@@ -2961,6 +3196,11 @@ skip.installer property in build.properties" />
     <mkdir dir="${base.path}"/>
     <tempfile property="temp.file" destdir="${base.path}" prefix="download-" suffix=".tmp"/>
     <get src="${sourcefile}" httpusecaches="${trydownload.httpusecaches}" dest="${temp.file}"/>
+    <verifyChecksum
+      enabled="${checksum.enabled}"
+      algorithm="${checksum.algorithm}" value="${checksum.value}"
+      file="${temp.file}" name="${destfile}" />
+
     <mkdir dir="${destdir}"/>
     <move file="${temp.file}" tofile="${destfile}"/>
   </target>
@@ -2983,6 +3223,11 @@ skip.installer property in build.properties" />
 
     <available file="${temp.file}" property="exist"/>
     <fail unless="exist" message="Failed to download [${destfile}]. All download sources are unavailable." />
+
+    <verifyChecksum
+      enabled="${checksum.enabled}"
+      algorithm="${checksum.algorithm}" value="${checksum.value}"
+      file="${temp.file}" name="${destfile}" />
 
     <mkdir dir="${destdir}"/>
     <move file="${temp.file}" tofile="${destfile}"/>
@@ -3052,7 +3297,7 @@ Use the "ide-netbeans-replace" target if you wish to overwrite them.</echo>
 
   <target name="-ide-netbeans-create"
           unless="tomcat-nb.home.exists">
-    <!-- Unconditionally create or ovverwrite default NetBeans project files -->
+    <!-- Unconditionally create or overwrite default NetBeans project files -->
     <property name="tomcat-nb.dist" value="${tomcat.home}/res/ide-support/netbeans" />
     <mkdir dir="${tomcat-nb.home}/"/>
     <copy todir="${tomcat-nb.home}" overwrite="true">
@@ -3102,15 +3347,15 @@ Read the Building page on the Apache Tomcat documentation site for details on ho
     <attribute name="file" />
     <sequential>
       <local name="filename" />
-      <local name="md5value" />
       <local name="sha1value" />
+      <local name="sha512value" />
 
       <basename file="@{file}" property="filename" />
-      <checksum algorithm="MD5" file="@{file}" property="md5value" />
       <checksum algorithm="SHA-1" file="@{file}" property="sha1value" />
+      <checksum algorithm="SHA-512" file="@{file}" property="sha512value" />
 
-      <echo file="@{file}.md5" message="${md5value}${md5sum.binary-prefix}${filename}" />
       <echo file="@{file}.sha1" message="${sha1value}${md5sum.binary-prefix}${filename}" />
+      <echo file="@{file}.sha512" message="${sha512value}${md5sum.binary-prefix}${filename}" />
 
       <antcall target="sign" >
         <param name="file" value="@{file}" />

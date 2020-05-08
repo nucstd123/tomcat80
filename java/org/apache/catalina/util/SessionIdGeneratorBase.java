@@ -32,7 +32,7 @@ import org.apache.tomcat.util.res.StringManager;
 public abstract class SessionIdGeneratorBase extends LifecycleBase
         implements SessionIdGenerator {
 
-    private static final Log log = LogFactory.getLog(SessionIdGeneratorBase.class);
+    private final Log log = LogFactory.getLog(SessionIdGeneratorBase.class); // must not be static
 
 
     private static final StringManager sm =
@@ -191,13 +191,14 @@ public abstract class SessionIdGeneratorBase extends LifecycleBase
             try {
                 // Construct and seed a new random number generator
                 Class<?> clazz = Class.forName(secureRandomClass);
-                result = (SecureRandom) clazz.newInstance();
+                result = (SecureRandom) clazz.getConstructor().newInstance();
             } catch (Exception e) {
                 log.error(sm.getString("sessionIdGeneratorBase.random",
                         secureRandomClass), e);
             }
         }
 
+        boolean error = false;
         if (result == null) {
             // No secureRandomClass or creation failed. Use SecureRandom.
             try {
@@ -210,15 +211,17 @@ public abstract class SessionIdGeneratorBase extends LifecycleBase
                     result = SecureRandom.getInstance(secureRandomAlgorithm);
                 }
             } catch (NoSuchAlgorithmException e) {
+                error = true;
                 log.error(sm.getString("sessionIdGeneratorBase.randomAlgorithm",
                         secureRandomAlgorithm), e);
             } catch (NoSuchProviderException e) {
+                error = true;
                 log.error(sm.getString("sessionIdGeneratorBase.randomProvider",
                         secureRandomProvider), e);
             }
         }
 
-        if (result == null) {
+        if (result == null && error) {
             // Invalid provider / algorithm
             try {
                 result = SecureRandom.getInstance("SHA1PRNG");
@@ -236,10 +239,11 @@ public abstract class SessionIdGeneratorBase extends LifecycleBase
         // Force seeding to take place
         result.nextInt();
 
-        long t2=System.currentTimeMillis();
-        if( (t2-t1) > 100 )
-            log.info(sm.getString("sessionIdGeneratorBase.createRandom",
-                    result.getAlgorithm(), Long.valueOf(t2-t1)));
+        long t2 = System.currentTimeMillis();
+        if ((t2 - t1) > 100) {
+            log.warn(sm.getString("sessionIdGeneratorBase.createRandom",
+                    result.getAlgorithm(), Long.valueOf(t2 - t1)));
+        }
         return result;
     }
 

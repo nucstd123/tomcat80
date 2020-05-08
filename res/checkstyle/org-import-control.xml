@@ -76,7 +76,7 @@
       <disallow pkg="javax.ejb"/>
       <disallow pkg="javax.persistence"/>
       <disallow pkg="javax.servlet"/>
-      <disallow pkg="org.apache.catalina"/>
+      <disallow pkg="org\.apache\.catalina(?!\.tribes).*" regex="true"/>
       <disallow pkg="org.apache.coyote"/>
       <disallow pkg="org.apache.naming"/>
       <disallow pkg="org.apache.tomcat"/>
@@ -113,6 +113,7 @@
   <subpackage name="naming">
     <allow pkg="javax.mail"/>
     <allow pkg="javax.wsdl"/>
+    <allow pkg="org.apache.juli"/>
     <allow pkg="org.apache.naming"/>
     <allow class="org.apache.tomcat.util.buf.UDecoder"/>
     <allow class="org.apache.tomcat.util.buf.UEncoder"/>

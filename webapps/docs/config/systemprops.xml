@@ -153,10 +153,17 @@
       <code>true</code> will be used.</p>
     </property>
 
+    <property name="org.apache.jasper.runtime. BodyContentImpl.BUFFER_SIZE">
+      <p>The size (in characters) to use when creating a tag buffer.</p>
+      <p>If not specified, the default value of
+      <code>org.apache.jasper.Constants.DEFAULT_TAG_BUFFER_SIZE</code> (512)
+      will be used.</p>
+    </property>
+
     <property name="org.apache.jasper.runtime. BodyContentImpl.LIMIT_BUFFER">
       <p>If <code>true</code>, any tag buffer that expands beyond
-      <code>org.apache.jasper.Constants.DEFAULT_TAG_BUFFER_SIZE</code> will be
-      destroyed and a new buffer created of the default size.</p>
+      <code>org.apache.jasper.runtime.BodyContentImpl.BUFFER_SIZE</code> will be
+      destroyed and a new buffer created.</p>
       <p>If not specified, the default value of <code>false</code> will be used.</p>
     </property>
 
@@ -549,6 +556,7 @@
          <li>too many headers, too many parameters (hitting
            <code>maxHeaderCount</code> or <code>maxParameterCount</code> limits
            of a <a href="http.html">connector</a>).</li>
+         <li>invalid host names</li>
          </ul>
          <p>Other errors triggered by invalid input data may be added to this
          system in later versions.</p>
@@ -663,7 +671,7 @@
       <code>javax.sql.DataSource</code>. If not specified the default of
       <code>org.apache.tomcat.dbcp.dbcp2.BasicDataSourceFactory</code> is used
       which is a package renamed (to avoid conflicts) copy of
-      <a href="http://commons.apache.org/dbcp">Apache Commons DBCP</a>.</p>
+      <a href="https://commons.apache.org/dbcp">Apache Commons DBCP</a>.</p>
     </property>
 
     <property name="javax.mail.Session.Factory">
@@ -705,7 +713,7 @@
       <p>If not specified, the default value of <code>200</code> will be used.</p>
     </property>
 
-    <property name="org.apache.tomcat.util.buf.UriUtil.WAR_SEPARATOR">
+    <property name="org.apache.tomcat.util.buf.UriUtil. WAR_SEPARATOR">
       <p>The character to use to separate the WAR file and WAR content parts of
       a WAR URL using the custom WAR scheme provided by Tomcat. This is
       equivalent to how <code>!</code> is used in JAR URLs.</p>
@@ -745,12 +753,16 @@
       <p>If not specified, the default value of <code>3</code> will be used.</p>
     </property>
 
-    <property name="tomcat.util.http.parser.HttpParser.requestTargetAllow">
+    <property name="tomcat.util.http.parser.HttpParser. requestTargetAllow">
+      <p><i>This system property is deprecated. Use the
+      <code>relaxedPathChars</code> and <code>relaxedQueryChars</code>
+      attributes of the Connector instead. These attributes permit a wider range
+      of characters to be configured as valid.</i></p>
       <p>A string comprised of characters the server should allow even when they are not encoded.
       These characters would normally result in a 400 status.</p>
       <p>The acceptable characters for this property are: <code>|</code>, <code>{</code>
       , and <code>}</code></p>
-      <p><strong>WARNING</strong>: Use of this option will expose the server to CVE-2016-6816.
+      <p><strong>WARNING</strong>: Use of this option may expose the server to CVE-2016-6816.
       </p>
       <p>If not specified, the default value of <code>null</code> will be used.</p>
     </property>

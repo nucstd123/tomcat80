@@ -152,7 +152,7 @@ public class ImportHandler {
         if (className != null) {
             Class<?> clazz = findClass(className, true);
             if (clazz != null) {
-                clazzes.put(className, clazz);
+                clazzes.put(name, clazz);
                 return clazz;
             }
         }
@@ -190,7 +190,7 @@ public class ImportHandler {
 
     private Class<?> findClass(String name, boolean throwException) {
         Class<?> clazz;
-        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        ClassLoader cl = Util.getContextClassLoader();
         String path = name.replace('.', '/') + ".class";
         try {
             /* Given that findClass() has to be called for every imported

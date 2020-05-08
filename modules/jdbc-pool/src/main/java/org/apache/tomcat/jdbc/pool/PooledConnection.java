@@ -270,7 +270,7 @@ public class PooledConnection {
                             poolProperties.getDriverClassName(),
                             PooledConnection.class.getClassLoader(),
                             Thread.currentThread().getContextClassLoader()
-                        ).newInstance();
+                        ).getConstructor().newInstance();
                 }
             }
         } catch (java.lang.Exception cn) {
@@ -529,12 +529,28 @@ public class PooledConnection {
             return true;
         } catch (Exception ex) {
             if (getPoolProperties().getLogValidationErrors()) {
-                log.warn("SQL Validation error", ex);
+                log.error("SQL Validation error", ex);
             } else if (log.isDebugEnabled()) {
                 log.debug("Unable to validate object:",ex);
             }
             if (stmt!=null)
                 try { stmt.close();} catch (Exception ignore2){/*NOOP*/}
+
+            try {
+                if(!connection.getAutoCommit()) {
+                    connection.rollback();
+                }
+            } catch (SQLException e) {
+                // do nothing
+            }
+        } finally {
+            try {
+                if(!connection.getAutoCommit()) {
+                    connection.commit();
+                }
+            } catch (SQLException e) {
+                // do nothing
+            }
         }
         return false;
     } //validate
@@ -755,4 +771,11 @@ public class PooledConnection {
         return attributes;
     }
 
+    public void clearWarnings() {
+        try {
+            connection.clearWarnings();
+        } catch (SQLException e) {
+            log.warn("Unable to clear Warnings, connection will be closed.", e);
+        }
+    }
 }

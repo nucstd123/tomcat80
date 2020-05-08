@@ -380,6 +380,18 @@ public class DefaultServlet extends HttpServlet {
     }
 
 
+    @Override
+    protected void service(HttpServletRequest req, HttpServletResponse resp)
+            throws ServletException, IOException {
+
+        if (req.getDispatcherType() == DispatcherType.ERROR) {
+            doGet(req, resp);
+        } else {
+            super.service(req, resp);
+        }
+    }
+
+
     /**
      * Process a GET request for the specified resource.
      *
@@ -708,6 +720,7 @@ public class DefaultServlet extends HttpServlet {
         }
 
         WebResource resource = resources.getResource(path);
+        boolean isError = DispatcherType.ERROR == request.getDispatcherType();
 
         if (!resource.exists()) {
             // Check if we're included so we can return the appropriate
@@ -723,7 +736,12 @@ public class DefaultServlet extends HttpServlet {
                         "defaultServlet.missingResource", requestUri));
             }
 
-            response.sendError(HttpServletResponse.SC_NOT_FOUND, requestUri);
+            if (isError) {
+                response.sendError(((Integer) request.getAttribute(
+                        RequestDispatcher.ERROR_STATUS_CODE)).intValue());
+            } else {
+                response.sendError(HttpServletResponse.SC_NOT_FOUND, requestUri);
+            }
             return;
         }
 
@@ -742,25 +760,14 @@ public class DefaultServlet extends HttpServlet {
                         "defaultServlet.missingResource", requestUri));
             }
 
-            response.sendError(HttpServletResponse.SC_FORBIDDEN, requestUri);
-            return;
-        }
-
-        // If the resource is not a collection, and the resource path
-        // ends with "/" or "\", return NOT FOUND
-        if (resource.isFile() && (path.endsWith("/") || path.endsWith("\\"))) {
-            // Check if we're included so we can return the appropriate
-            // missing resource name in the error
-            String requestUri = (String) request.getAttribute(
-                    RequestDispatcher.INCLUDE_REQUEST_URI);
-            if (requestUri == null) {
-                requestUri = request.getRequestURI();
+            if (isError) {
+                response.sendError(((Integer) request.getAttribute(
+                        RequestDispatcher.ERROR_STATUS_CODE)).intValue());
+            } else {
+                response.sendError(HttpServletResponse.SC_FORBIDDEN, requestUri);
             }
-            response.sendError(HttpServletResponse.SC_NOT_FOUND, requestUri);
             return;
         }
-
-        boolean isError = response.getStatus() >= HttpServletResponse.SC_BAD_REQUEST;
 
         boolean included = false;
         // Check if the conditions specified in the optional If headers are

@@ -264,9 +264,11 @@ public class Http11NioProtocol extends AbstractHttp11JsseProtocol<NioChannel> {
         @Override
         public Http11NioProcessor createProcessor() {
             Http11NioProcessor processor = new Http11NioProcessor(
-                    proto.getMaxHttpHeaderSize(), (NioEndpoint)proto.endpoint,
-                    proto.getMaxTrailerSize(), proto.getAllowedTrailerHeadersAsSet(),
-                    proto.getMaxExtensionSize(), proto.getMaxSwallowSize());
+                    proto.getMaxHttpHeaderSize(), proto.getRejectIllegalHeaderName(),
+                    (NioEndpoint)proto.endpoint, proto.getMaxTrailerSize(),
+                    proto.getAllowedTrailerHeadersAsSet(), proto.getMaxExtensionSize(),
+                    proto.getMaxSwallowSize(), proto.getRelaxedPathChars(),
+                    proto.getRelaxedQueryChars());
             proto.configureProcessor(processor);
             register(processor);
             return processor;

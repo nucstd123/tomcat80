@@ -88,7 +88,11 @@ class LinkedBlockingDeque<E> extends AbstractQueue<E>
 
     private static final long serialVersionUID = -387911632671998426L;
 
-    /** Doubly-linked list node class */
+    /**
+     * Doubly-linked list node class.
+     *
+     * @param <E> node item type
+     */
     private static final class Node<E> {
         /**
          * The item, or null if this node has been removed.
@@ -897,7 +901,7 @@ class LinkedBlockingDeque<E> extends AbstractQueue<E>
     }
 
     /**
-     * Empty the queue to the specified collection.
+     * Drains the queue to the specified collection.
      *
      * @param c The collection to add the elements to
      *
@@ -916,7 +920,7 @@ class LinkedBlockingDeque<E> extends AbstractQueue<E>
     }
 
     /**
-     * Empty no more than the specified number of elements from the queue to the
+     * Drains no more than the specified number of elements from the queue to the
      * specified collection.
      *
      * @param c           collection to add the elements to
@@ -1326,7 +1330,7 @@ class LinkedBlockingDeque<E> extends AbstractQueue<E>
     }
 
     /**
-     * Save the state of this deque to a stream (that is, serialize it).
+     * Saves the state of this deque to a stream (that is, serialize it).
      *
      * @serialData The capacity (int), followed by elements (each an
      * {@code Object}) in the proper order, followed by a null
@@ -1350,7 +1354,7 @@ class LinkedBlockingDeque<E> extends AbstractQueue<E>
     }
 
     /**
-     * Reconstitute this deque from a stream (that is,
+     * Reconstitutes this deque from a stream (that is,
      * deserialize it).
      * @param s the stream
      */
@@ -1375,8 +1379,7 @@ class LinkedBlockingDeque<E> extends AbstractQueue<E>
     // Monitoring methods
 
     /**
-     * Returns true if there are threads waiting to take instances from this deque.
-     * See disclaimer on accuracy in
+     * Returns true if there are threads waiting to take instances from this deque. See disclaimer on accuracy in
      * {@link java.util.concurrent.locks.ReentrantLock#hasWaiters(Condition)}.
      *
      * @return true if there is at least one thread waiting on this deque's notEmpty condition.
@@ -1391,9 +1394,8 @@ class LinkedBlockingDeque<E> extends AbstractQueue<E>
     }
 
     /**
-     * Returns the length of the queue of threads waiting to take instances from this deque.
-     * See disclaimer on accuracy in
-     * {@link java.util.concurrent.locks.ReentrantLock#getWaitQueueLength(Condition)}.
+     * Returns the length of the queue of threads waiting to take instances from this deque. See disclaimer on accuracy
+     * in {@link java.util.concurrent.locks.ReentrantLock#getWaitQueueLength(Condition)}.
      *
      * @return number of threads waiting on this deque's notEmpty condition.
      */
@@ -1407,8 +1409,7 @@ class LinkedBlockingDeque<E> extends AbstractQueue<E>
     }
 
     /**
-     * Interrupts the threads currently waiting to take an object from the pool.
-     * See disclaimer on accuracy in
+     * Interrupts the threads currently waiting to take an object from the pool. See disclaimer on accuracy in
      * {@link java.util.concurrent.locks.ReentrantLock#getWaitingThreads(Condition)}.
      */
     public void interuptTakeWaiters() {

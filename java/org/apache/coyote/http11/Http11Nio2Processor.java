@@ -32,11 +32,13 @@ import org.apache.coyote.http11.filters.BufferedInputFilter;
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
 import org.apache.tomcat.util.ExceptionUtils;
+import org.apache.tomcat.util.http.parser.HttpParser;
 import org.apache.tomcat.util.net.AbstractEndpoint.Handler.SocketState;
 import org.apache.tomcat.util.net.Nio2Channel;
 import org.apache.tomcat.util.net.Nio2Endpoint;
 import org.apache.tomcat.util.net.SSLSupport;
 import org.apache.tomcat.util.net.SecureNio2Channel;
+import org.apache.tomcat.util.net.SendfileKeepAliveState;
 import org.apache.tomcat.util.net.SocketStatus;
 import org.apache.tomcat.util.net.SocketWrapper;
 
@@ -61,12 +63,17 @@ public class Http11Nio2Processor extends AbstractHttp11Processor<Nio2Channel> {
     // ----------------------------------------------------------- Constructors
 
 
-    public Http11Nio2Processor(int maxHttpHeaderSize, Nio2Endpoint endpoint, int maxTrailerSize,
-            Set<String> allowedTrailerHeaders, int maxExtensionSize, int maxSwallowSize) {
+    public Http11Nio2Processor(int maxHttpHeaderSize, boolean rejectIllegalHeaderName,
+            Nio2Endpoint endpoint, int maxTrailerSize, Set<String> allowedTrailerHeaders,
+            int maxExtensionSize, int maxSwallowSize, String relaxedPathChars,
+            String relaxedQueryChars) {
 
         super(endpoint);
 
-        inputBuffer = new InternalNio2InputBuffer(request, maxHttpHeaderSize);
+        httpParser = new HttpParser(relaxedPathChars, relaxedQueryChars);
+
+        inputBuffer = new InternalNio2InputBuffer(request, maxHttpHeaderSize,
+                rejectIllegalHeaderName, httpParser);
         request.setInputBuffer(inputBuffer);
 
         outputBuffer = new InternalNio2OutputBuffer(response, maxHttpHeaderSize);
@@ -280,7 +287,15 @@ public class Http11Nio2Processor extends AbstractHttp11Processor<Nio2Channel> {
         // Do sendfile as needed: add socket to sendfile and end
         if (sendfileData != null && !getErrorState().isError()) {
             ((Nio2Endpoint.Nio2SocketWrapper) socketWrapper).setSendfileData(sendfileData);
-            sendfileData.keepAlive = keepAlive;
+            if (keepAlive) {
+                if (getInputBuffer().available(false) == 0) {
+                    sendfileData.keepAliveState = SendfileKeepAliveState.OPEN;
+                } else {
+                    sendfileData.keepAliveState = SendfileKeepAliveState.PIPELINED;
+                }
+            } else {
+                sendfileData.keepAliveState = SendfileKeepAliveState.NONE;
+            }
             switch (((Nio2Endpoint) endpoint).processSendfile(
                     (Nio2Endpoint.Nio2SocketWrapper) socketWrapper)) {
             case DONE:

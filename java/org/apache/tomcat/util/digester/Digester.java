@@ -89,7 +89,8 @@ public class Digester extends DefaultHandler2 {
             for (int i = 0; i < cls.length; i++) {
                 try {
                     Class<?> clazz = Class.forName(className, true, cls[i]);
-                    propertySource = (IntrospectionUtils.PropertySource) clazz.newInstance();
+                    propertySource = (IntrospectionUtils.PropertySource)
+                            clazz.getConstructor().newInstance();
                     break;
                 } catch (Throwable t) {
                     ExceptionUtils.handleThrowable(t);
@@ -289,7 +290,7 @@ public class Digester extends DefaultHandler2 {
     /**
      * The Log to which most logging calls will be made.
      */
-    protected Log log = LogFactory.getLog("org.apache.tomcat.util.digester.Digester");
+    protected Log log = LogFactory.getLog(Digester.class);
 
 
     /**
@@ -1958,7 +1959,7 @@ public class Digester extends DefaultHandler2 {
                     newAttrs.setValue(i, newValue);
                 }
             } catch (Exception e) {
-                // ignore - let the attribute have its original value
+                log.warn("Attribute [" + newAttrs.getLocalName(i) + "] failed to update and remains [" + value + "].", e);
             }
         }
 

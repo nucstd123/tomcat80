@@ -42,8 +42,6 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 
-import static org.junit.Assert.fail;
-
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -75,6 +73,7 @@ import org.apache.tomcat.websocket.CaseInsensitiveKeyMap;
 public abstract class TomcatBaseTest extends LoggingBaseTest {
     private Tomcat tomcat;
     private boolean accessLogEnabled = false;
+    protected static final int DEFAULT_CLIENT_TIMEOUT_MS = 300_000;
 
     public static final String TEMP_DIR = System.getProperty("java.io.tmpdir");
 
@@ -142,7 +141,7 @@ public abstract class TomcatBaseTest extends LoggingBaseTest {
 
         File appBase = new File(getTemporaryDirectory(), "webapps");
         if (!appBase.exists() && !appBase.mkdir()) {
-            fail("Unable to create appBase for test");
+            Assert.fail("Unable to create appBase for test");
         }
 
         tomcat = new TomcatWithFastSessionIDs();
@@ -615,38 +614,48 @@ public abstract class TomcatBaseTest extends LoggingBaseTest {
         return out;
     }
 
-    public static int getUrl(String path, ByteChunk out,
-            Map<String, List<String>> resHead) throws IOException {
+    public static int getUrl(String path, ByteChunk out, Map<String, List<String>> resHead)
+            throws IOException {
         return getUrl(path, out, null, resHead);
     }
 
-    public static int headUrl(String path, ByteChunk out,
-            Map<String, List<String>> resHead) throws IOException {
-        return methodUrl(path, out, 1000000, null, resHead, "HEAD");
+    public static int getUrl(String path, ByteChunk out, boolean followRedirects)
+            throws IOException {
+        return methodUrl(path, out, DEFAULT_CLIENT_TIMEOUT_MS, null, null, "GET", followRedirects);
     }
 
-    public static int getUrl(String path, ByteChunk out,
-            Map<String, List<String>> reqHead,
+    public static int headUrl(String path, ByteChunk out, Map<String, List<String>> resHead)
+            throws IOException {
+        return methodUrl(path, out, DEFAULT_CLIENT_TIMEOUT_MS, null, resHead, "HEAD");
+    }
+
+    public static int getUrl(String path, ByteChunk out, Map<String, List<String>> reqHead,
             Map<String, List<String>> resHead) throws IOException {
-        return getUrl(path, out, 1000000, reqHead, resHead);
+        return getUrl(path, out, DEFAULT_CLIENT_TIMEOUT_MS, reqHead, resHead);
     }
 
     public static int getUrl(String path, ByteChunk out, int readTimeout,
-            Map<String, List<String>> reqHead,
-            Map<String, List<String>> resHead) throws IOException {
+            Map<String, List<String>> reqHead, Map<String, List<String>> resHead)
+            throws IOException {
         return methodUrl(path, out, readTimeout, reqHead, resHead, "GET");
     }
 
     public static int methodUrl(String path, ByteChunk out, int readTimeout,
-            Map<String, List<String>> reqHead,
-            Map<String, List<String>> resHead,
-            String method) throws IOException {
+            Map<String, List<String>> reqHead, Map<String, List<String>> resHead, String method)
+            throws IOException {
+        return methodUrl(path, out, readTimeout, reqHead, resHead, method, true);
+    }
+
+    public static int methodUrl(String path, ByteChunk out, int readTimeout,
+                Map<String, List<String>> reqHead, Map<String, List<String>> resHead, String method,
+                boolean followRedirects) throws IOException {
 
         URL url = new URL(path);
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setUseCaches(false);
         connection.setReadTimeout(readTimeout);
         connection.setRequestMethod(method);
+        connection.setInstanceFollowRedirects(followRedirects);
         if (reqHead != null) {
             for (Map.Entry<String, List<String>> entry : reqHead.entrySet()) {
                 StringBuilder valueList = new StringBuilder();

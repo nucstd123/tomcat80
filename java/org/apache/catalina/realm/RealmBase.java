@@ -757,9 +757,9 @@ public abstract class RealmBase extends LifecycleMBeanBase implements Realm {
 
         // Check each defined security constraint
         String uri = request.getRequestPathMB().toString();
-        // Bug47080 - in rare cases this may be null
+        // Bug47080 - in rare cases this may be null or ""
         // Mapper treats as '/' do the same to prevent NPE
-        if (uri == null) {
+        if (uri == null || uri.length() == 0) {
             uri = "/";
         }
 
@@ -791,7 +791,8 @@ public abstract class RealmBase extends LifecycleMBeanBase implements Realm {
                 }
 
                 for(int k=0; k < patterns.length; k++) {
-                    if(uri.equals(patterns[k])) {
+                    // Exact match including special case for the context root.
+                    if(uri.equals(patterns[k]) || patterns[k].length() == 0 && uri.equals("/")) {
                         found = true;
                         if(collection[j].findMethod(method)) {
                             if(results == null) {
@@ -1492,7 +1493,10 @@ public abstract class RealmBase extends LifecycleMBeanBase implements Realm {
      *
      * @return The digested credentials as a hex string or the original plain
      *         text credentials if an error occurs.
+     *
+     * @deprecated  Unused. This will be removed in Tomcat 9.
      */
+    @Deprecated
     public static final String Digest(String credentials, String algorithm,
                                       String encoding) {
 
@@ -1627,11 +1631,11 @@ public abstract class RealmBase extends LifecycleMBeanBase implements Realm {
         if (handlerClassName == null) {
             for (Class<? extends DigestCredentialHandlerBase> clazz : credentialHandlerClasses) {
                 try {
-                    handler = clazz.newInstance();
+                    handler = clazz.getConstructor().newInstance();
                     if (IntrospectionUtils.setProperty(handler, "algorithm", algorithm)) {
                         break;
                     }
-                } catch (InstantiationException | IllegalAccessException e) {
+                } catch (ReflectiveOperationException e) {
                     // This isn't good.
                     throw new RuntimeException(e);
                 }
@@ -1639,10 +1643,9 @@ public abstract class RealmBase extends LifecycleMBeanBase implements Realm {
         } else {
             try {
                 Class<?> clazz = Class.forName(handlerClassName);
-                handler = (DigestCredentialHandlerBase) clazz.newInstance();
+                handler = (DigestCredentialHandlerBase) clazz.getConstructor().newInstance();
                 IntrospectionUtils.setProperty(handler, "algorithm", algorithm);
-            } catch (InstantiationException | IllegalAccessException
-                    | ClassNotFoundException e) {
+            } catch (ReflectiveOperationException e) {
                 throw new RuntimeException(e);
             }
         }
@@ -1773,13 +1776,9 @@ public abstract class RealmBase extends LifecycleMBeanBase implements Realm {
         try {
             @SuppressWarnings("unchecked")
             Class<? extends X509UsernameRetriever> clazz = (Class<? extends X509UsernameRetriever>)Class.forName(className);
-            return clazz.newInstance();
-        } catch (ClassNotFoundException e) {
-            throw new LifecycleException(sm.getString("realmBase.createUsernameRetriever.ClassNotFoundException", className), e);
-        } catch (InstantiationException e) {
-            throw new LifecycleException(sm.getString("realmBase.createUsernameRetriever.InstantiationException", className), e);
-        } catch (IllegalAccessException e) {
-            throw new LifecycleException(sm.getString("realmBase.createUsernameRetriever.IllegalAccessException", className), e);
+            return clazz.getConstructor().newInstance();
+        } catch (ReflectiveOperationException e) {
+            throw new LifecycleException(sm.getString("realmBase.createUsernameRetriever.newInstance", className), e);
         } catch (ClassCastException e) {
             throw new LifecycleException(sm.getString("realmBase.createUsernameRetriever.ClassCastException", className), e);
         }

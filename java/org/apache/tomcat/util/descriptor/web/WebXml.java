@@ -39,6 +39,8 @@ import javax.servlet.descriptor.JspConfigDescriptor;
 import javax.servlet.descriptor.JspPropertyGroupDescriptor;
 import javax.servlet.descriptor.TaglibDescriptor;
 
+import org.apache.juli.logging.Log;
+import org.apache.juli.logging.LogFactory;
 import org.apache.tomcat.util.buf.UDecoder;
 import org.apache.tomcat.util.descriptor.XmlIdentifiers;
 import org.apache.tomcat.util.digester.DocumentProperties;
@@ -60,8 +62,7 @@ public class WebXml extends XmlEncodingBase implements DocumentProperties.Encodi
     private static final StringManager sm =
         StringManager.getManager(Constants.PACKAGE_NAME);
 
-    private static final org.apache.juli.logging.Log log=
-        org.apache.juli.logging.LogFactory.getLog(WebXml.class);
+    private final Log log = LogFactory.getLog(WebXml.class); // must not be static
 
     // Global defaults are overridable but Servlets and Servlet mappings need to
     // be unique. Duplicates normally trigger an error. This flag indicates if
@@ -302,7 +303,7 @@ public class WebXml extends XmlEncodingBase implements DocumentProperties.Encodi
 
     // servlet-mapping
     // Note: URLPatterns from web.xml may be URL encoded
-    //       (http://svn.apache.org/r285186)
+    //       (https://svn.apache.org/r285186)
     private final Map<String,String> servletMappings = new HashMap<>();
     private final Set<String> servletMappingNames = new HashSet<>();
     public void addServletMapping(String urlPattern, String servletName) {
@@ -977,7 +978,8 @@ public class WebXml extends XmlEncodingBase implements DocumentProperties.Encodi
                         resourceEnvRef.getName());
                 appendElement(sb, INDENT4, "resource-env-ref-type",
                         resourceEnvRef.getType());
-                // TODO mapped-name
+                appendElement(sb, INDENT4, "mapped-name",
+                        resourceEnvRef.getProperty("mappedName"));
                 for (InjectionTarget target :
                         resourceEnvRef.getInjectionTargets()) {
                     sb.append("    <injection-target>\n");
@@ -987,7 +989,7 @@ public class WebXml extends XmlEncodingBase implements DocumentProperties.Encodi
                             target.getTargetName());
                     sb.append("    </injection-target>\n");
                 }
-                // TODO lookup-name
+                appendElement(sb, INDENT4, "lookup-name", resourceEnvRef.getLookupName());
                 sb.append("  </resource-env-ref>\n");
             }
             sb.append('\n');
@@ -1002,10 +1004,9 @@ public class WebXml extends XmlEncodingBase implements DocumentProperties.Encodi
             appendElement(sb, INDENT4, "res-auth", resourceRef.getAuth());
             // resource-ref/res-sharing-scope was introduced in Servlet 2.3
             if (getMajorVersion() > 2 || getMinorVersion() > 2) {
-                appendElement(sb, INDENT4, "res-sharing-scope",
-                        resourceRef.getScope());
+                appendElement(sb, INDENT4, "res-sharing-scope", resourceRef.getScope());
             }
-            // TODO mapped-name
+            appendElement(sb, INDENT4, "mapped-name", resourceRef.getProperty("mappedName"));
             for (InjectionTarget target : resourceRef.getInjectionTargets()) {
                 sb.append("    <injection-target>\n");
                 appendElement(sb, INDENT6, "injection-target-class",
@@ -1014,7 +1015,7 @@ public class WebXml extends XmlEncodingBase implements DocumentProperties.Encodi
                         target.getTargetName());
                 sb.append("    </injection-target>\n");
             }
-            // TODO lookup-name
+            appendElement(sb, INDENT4, "lookup-name", resourceRef.getLookupName());
             sb.append("  </resource-ref>\n");
         }
         sb.append('\n');
@@ -1091,7 +1092,7 @@ public class WebXml extends XmlEncodingBase implements DocumentProperties.Encodi
             appendElement(sb, INDENT4, "env-entry-name", envEntry.getName());
             appendElement(sb, INDENT4, "env-entry-type", envEntry.getType());
             appendElement(sb, INDENT4, "env-entry-value", envEntry.getValue());
-            // TODO mapped-name
+            appendElement(sb, INDENT4, "mapped-name", envEntry.getProperty("mappedName"));
             for (InjectionTarget target : envEntry.getInjectionTargets()) {
                 sb.append("    <injection-target>\n");
                 appendElement(sb, INDENT6, "injection-target-class",
@@ -1100,7 +1101,7 @@ public class WebXml extends XmlEncodingBase implements DocumentProperties.Encodi
                         target.getTargetName());
                 sb.append("    </injection-target>\n");
             }
-            // TODO lookup-name
+            appendElement(sb, INDENT4, "lookup-name", envEntry.getLookupName());
             sb.append("  </env-entry>\n");
         }
         sb.append('\n');
@@ -1113,7 +1114,7 @@ public class WebXml extends XmlEncodingBase implements DocumentProperties.Encodi
             appendElement(sb, INDENT4, "home", ejbRef.getHome());
             appendElement(sb, INDENT4, "remote", ejbRef.getRemote());
             appendElement(sb, INDENT4, "ejb-link", ejbRef.getLink());
-            // TODO mapped-name
+            appendElement(sb, INDENT4, "mapped-name", ejbRef.getProperty("mappedName"));
             for (InjectionTarget target : ejbRef.getInjectionTargets()) {
                 sb.append("    <injection-target>\n");
                 appendElement(sb, INDENT6, "injection-target-class",
@@ -1122,7 +1123,7 @@ public class WebXml extends XmlEncodingBase implements DocumentProperties.Encodi
                         target.getTargetName());
                 sb.append("    </injection-target>\n");
             }
-            // TODO lookup-name
+            appendElement(sb, INDENT4, "lookup-name", ejbRef.getLookupName());
             sb.append("  </ejb-ref>\n");
         }
         sb.append('\n');
@@ -1138,7 +1139,7 @@ public class WebXml extends XmlEncodingBase implements DocumentProperties.Encodi
                 appendElement(sb, INDENT4, "local-home", ejbLocalRef.getHome());
                 appendElement(sb, INDENT4, "local", ejbLocalRef.getLocal());
                 appendElement(sb, INDENT4, "ejb-link", ejbLocalRef.getLink());
-                // TODO mapped-name
+                appendElement(sb, INDENT4, "mapped-name", ejbLocalRef.getProperty("mappedName"));
                 for (InjectionTarget target : ejbLocalRef.getInjectionTargets()) {
                     sb.append("    <injection-target>\n");
                     appendElement(sb, INDENT6, "injection-target-class",
@@ -1147,7 +1148,7 @@ public class WebXml extends XmlEncodingBase implements DocumentProperties.Encodi
                             target.getTargetName());
                     sb.append("    </injection-target>\n");
                 }
-                // TODO lookup-name
+                appendElement(sb, INDENT4, "lookup-name", ejbLocalRef.getLookupName());
                 sb.append("  </ejb-local-ref>\n");
             }
             sb.append('\n');
@@ -1197,7 +1198,7 @@ public class WebXml extends XmlEncodingBase implements DocumentProperties.Encodi
                     sb.append("    </handler>\n");
                 }
                 // TODO handler-chains
-                // TODO mapped-name
+                appendElement(sb, INDENT4, "mapped-name", serviceRef.getProperty("mappedName"));
                 for (InjectionTarget target : serviceRef.getInjectionTargets()) {
                     sb.append("    <injection-target>\n");
                     appendElement(sb, INDENT6, "injection-target-class",
@@ -1206,7 +1207,7 @@ public class WebXml extends XmlEncodingBase implements DocumentProperties.Encodi
                             target.getTargetName());
                     sb.append("    </injection-target>\n");
                 }
-                // TODO lookup-name
+                appendElement(sb, INDENT4, "lookup-name", serviceRef.getLookupName());
                 sb.append("  </service-ref>\n");
             }
             sb.append('\n');
@@ -1252,7 +1253,7 @@ public class WebXml extends XmlEncodingBase implements DocumentProperties.Encodi
                         mdr.getUsage());
                 appendElement(sb, INDENT4, "message-destination-link",
                         mdr.getLink());
-                // TODO mapped-name
+                appendElement(sb, INDENT4, "mapped-name", mdr.getProperty("mappedName"));
                 for (InjectionTarget target : mdr.getInjectionTargets()) {
                     sb.append("    <injection-target>\n");
                     appendElement(sb, INDENT6, "injection-target-class",
@@ -1261,7 +1262,7 @@ public class WebXml extends XmlEncodingBase implements DocumentProperties.Encodi
                             target.getTargetName());
                     sb.append("    </injection-target>\n");
                 }
-                // TODO lookup-name
+                appendElement(sb, INDENT4, "lookup-name", mdr.getLookupName());
                 sb.append("  </message-destination-ref>\n");
             }
             sb.append('\n');
@@ -1272,7 +1273,8 @@ public class WebXml extends XmlEncodingBase implements DocumentProperties.Encodi
                 appendElement(sb, INDENT4, "display-name", md.getDisplayName());
                 appendElement(sb, INDENT4, "message-destination-name",
                         md.getName());
-                // TODO mapped-name
+                appendElement(sb, INDENT4, "mapped-name", md.getProperty("mappedName"));
+                appendElement(sb, INDENT4, "lookup-name", md.getLookupName());
                 sb.append("  </message-destination>\n");
             }
             sb.append('\n');
@@ -1902,7 +1904,7 @@ public class WebXml extends XmlEncodingBase implements DocumentProperties.Encodi
         return true;
     }
 
-    private static <T extends ResourceBase> boolean mergeResourceMap(
+    private <T extends ResourceBase> boolean mergeResourceMap(
             Map<String, T> fragmentResources, Map<String, T> mainResources,
             Map<String, T> tempResources, WebXml fragment) {
         for (T resource : fragmentResources.values()) {
@@ -1930,7 +1932,7 @@ public class WebXml extends XmlEncodingBase implements DocumentProperties.Encodi
         return true;
     }
 
-    private static <T> boolean mergeMap(Map<String,T> fragmentMap,
+    private <T> boolean mergeMap(Map<String,T> fragmentMap,
             Map<String,T> mainMap, Map<String,T> tempMap, WebXml fragment,
             String mapName) {
         for (Entry<String, T> entry : fragmentMap.entrySet()) {
@@ -2123,7 +2125,7 @@ public class WebXml extends XmlEncodingBase implements DocumentProperties.Encodi
     }
 
 
-    private static boolean mergeLifecycleCallback(
+    private boolean mergeLifecycleCallback(
             Map<String, String> fragmentMap, Map<String, String> tempMap,
             WebXml fragment, String mapName) {
         for (Entry<String, String> entry : fragmentMap.entrySet()) {
@@ -2156,17 +2158,22 @@ public class WebXml extends XmlEncodingBase implements DocumentProperties.Encodi
      */
     public static Set<WebXml> orderWebFragments(WebXml application,
             Map<String,WebXml> fragments, ServletContext servletContext) {
+        return application.orderWebFragments(fragments, servletContext);
+    }
+
+
+    private Set<WebXml> orderWebFragments(Map<String,WebXml> fragments,
+            ServletContext servletContext) {
 
         Set<WebXml> orderedFragments = new LinkedHashSet<>();
 
-        boolean absoluteOrdering =
-            (application.getAbsoluteOrdering() != null);
+        boolean absoluteOrdering = getAbsoluteOrdering() != null;
         boolean orderingPresent = false;
 
         if (absoluteOrdering) {
             orderingPresent = true;
             // Only those fragments listed should be processed
-            Set<String> requestedOrder = application.getAbsoluteOrdering();
+            Set<String> requestedOrder = getAbsoluteOrdering();
 
             for (String requestedName : requestedOrder) {
                 if (WebXml.ORDER_OTHERS.equals(requestedName)) {

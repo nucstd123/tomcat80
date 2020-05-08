@@ -915,7 +915,7 @@ public class NioEndpoint extends AbstractEndpoint<NioChannel> {
             boolean result = false;
 
             PollerEvent pe = null;
-            while ( (pe = events.poll()) != null ) {
+            for (int i = 0, size = events.size(); i < size && (pe = events.poll()) != null; i++ ) {
                 result = true;
                 try {
                     pe.run();
@@ -970,6 +970,22 @@ public class NioEndpoint extends AbstractEndpoint<NioChannel> {
                 if (ka!=null) handler.release(ka);
                 else handler.release((SocketChannel)key.channel());
                 if (key.isValid()) key.cancel();
+                // If it is available, close the NioChannel first which should
+                // in turn close the underlying SocketChannel. The NioChannel
+                // needs to be closed first, if available, to ensure that TLS
+                // connections are shut down cleanly.
+                if (ka != null) {
+                    try {
+                        ka.getSocket().close(true);
+                    } catch (Exception e){
+                        if (log.isDebugEnabled()) {
+                            log.debug(sm.getString(
+                                    "endpoint.debug.socketCloseFail"), e);
+                        }
+                    }
+                }
+                // The SocketChannel is also available via the SelectionKey. If
+                // it hasn't been closed in the block above, close it now.
                 if (key.channel().isOpen()) {
                     try {
                         key.channel().close();
@@ -978,16 +994,6 @@ public class NioEndpoint extends AbstractEndpoint<NioChannel> {
                             log.debug(sm.getString(
                                     "endpoint.debug.channelCloseFail"), e);
                         }
-                    }
-                }
-                try {
-                    if (ka!=null) {
-                        ka.getSocket().close(true);
-                    }
-                } catch (Exception e){
-                    if (log.isDebugEnabled()) {
-                        log.debug(sm.getString(
-                                "endpoint.debug.socketCloseFail"), e);
                     }
                 }
                 try {
@@ -1214,16 +1220,30 @@ public class NioEndpoint extends AbstractEndpoint<NioChannel> {
                     // responsible for registering the socket for the
                     // appropriate event(s) if sendfile completes.
                     if (!calledByProcessor) {
-                        if (sd.keepAlive) {
-                            if (log.isDebugEnabled()) {
-                                log.debug("Connection is keep alive, registering back for OP_READ");
-                            }
-                            reg(sk,attachment,SelectionKey.OP_READ);
-                        } else {
+                        switch (sd.keepAliveState) {
+                        case NONE: {
                             if (log.isDebugEnabled()) {
                                 log.debug("Send file connection is being closed");
                             }
                             cancelledKey(sk,SocketStatus.STOP);
+                            break;
+                        }
+                        case PIPELINED: {
+                            if (log.isDebugEnabled()) {
+                                log.debug("Connection is keep alive, processing pipe-lined data");
+                            }
+                            if (!processSocket(attachment, SocketStatus.OPEN_READ, true)) {
+                                cancelledKey(sk, SocketStatus.DISCONNECT);
+                            }
+                            break;
+                        }
+                        case OPEN: {
+                            if (log.isDebugEnabled()) {
+                                log.debug("Connection is keep alive, registering back for OP_READ");
+                            }
+                            reg(sk, attachment, SelectionKey.OP_READ);
+                            break;
+                        }
                         }
                     }
                     return SendfileState.DONE;
@@ -1589,6 +1609,6 @@ public class NioEndpoint extends AbstractEndpoint<NioChannel> {
         public volatile long pos;
         public volatile long length;
         // KeepAlive flag
-        public volatile boolean keepAlive;
+        public SendfileKeepAliveState keepAliveState = SendfileKeepAliveState.NONE;
     }
 }

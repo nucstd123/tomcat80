@@ -308,6 +308,13 @@
       associated with the server.</p>
     </attribute>
 
+    <attribute name="allowHostHeaderMismatch" required="false">
+      <p>By default Tomcat will allow requests that specify a host in the
+      request line but specify a different host in the host header. This
+      check can be enabled by setting this attribute to <code>false</code>. If
+      not specified, the default is <code>true</code>.</p>
+    </attribute>
+
     <attribute name="allowedTrailerHeaders" required="false">
       <p>By default Tomcat will ignore all trailer headers when processing
       chunked input. For a header to be processed, it must be added to this
@@ -321,7 +328,7 @@
       connector is started and unbound when it is stopped.</p>
     </attribute>
 
-    <attribute name="compressableMimeType" required="false">
+    <attribute name="compressibleMimeType" required="false">
       <p>The value is a comma separated list of MIME types for which HTTP
       compression may be used.
       The default value is
@@ -493,13 +500,14 @@
     </attribute>
 
     <attribute name="minSpareThreads" required="false">
-      <p>The minimum number of threads always kept running. If not specified,
-      the default of <code>10</code> is used. If an executor is associated
-      with this connector, this attribute is ignored as the connector will
-      execute tasks using the executor rather than an internal thread pool. Note
-      that if an executor is configured any value set for this attribute will be
-      recorded correctly but it will be reported (e.g. via JMX) as
-      <code>-1</code> to make clear that it is not used.</p>
+      <p>The minimum number of threads always kept running.  This includes both
+      active and idle threads. If not specified, the default of <code>10</code>
+      is used. If an executor is associated with this connector, this attribute
+      is ignored as the connector will execute tasks using the executor rather
+      than an internal thread pool. Note that if an executor is configured any
+      value set for this attribute will be recorded correctly but it will be
+      reported (e.g. via JMX) as <code>-1</code> to make clear that it is not
+      used.</p>
     </attribute>
 
     <attribute name="noCompressionUserAgents" required="false">
@@ -519,6 +527,41 @@
       the maxThreads setting. If using Servlet 3.0 asynchronous processing, a
       good default is to use the larger of maxThreads and the maximum number of
       expected concurrent requests (synchronous and asynchronous).</p>
+    </attribute>
+
+    <attribute name="rejectIllegalHeaderName" required="false">
+      <p>If an HTTP request is received that contains an illegal header name
+      (i.e. the header name is not a token) this setting determines if the
+      request will be rejected with a 400 response (<code>true</code>) or if the
+      illegal header be ignored (<code>false</code>). The default value is
+      <code>false</code> which will cause the request to be processed but the
+      illegal header will be ignored.</p>
+    </attribute>
+
+    <attribute name="relaxedPathChars" required="false">
+      <p>The <a href="https://tools.ietf.org/rfc/rfc7230.txt">HTTP/1.1
+      specification</a> requires that certain characters are %nn encoded when
+      used in URI paths. Unfortunately, many user agents including all the major
+      browsers are not compliant with this specification and use these
+      characters in unencoded form. To prevent Tomcat rejecting such requests,
+      this attribute may be used to specify the additional characters to allow.
+      If not specified, no addtional characters will be allowed. The value may
+      be any combination of the following characters:
+      <code>&quot; &lt; &gt; [ \ ] ^ ` { | }</code> . Any other characters
+      present in the value will be ignored.</p>
+    </attribute>
+
+    <attribute name="relaxedQueryChars" required="false">
+      <p>The <a href="https://tools.ietf.org/rfc/rfc7230.txt">HTTP/1.1
+      specification</a> requires that certain characters are %nn encoded when
+      used in URI query strings. Unfortunately, many user agents including all
+      the major browsers are not compliant with this specification and use these
+      characters in unencoded form. To prevent Tomcat rejecting such requests,
+      this attribute may be used to specify the additional characters to allow.
+      If not specified, no addtional characters will be allowed. The value may
+      be any combination of the following characters:
+      <code>&quot; &lt; &gt; [ \ ] ^ ` { | }</code> . Any other characters
+      present in the value will be ignored.</p>
     </attribute>
 
     <attribute name="restrictedUserAgents" required="false">
@@ -1488,8 +1531,12 @@
     </attribute>
 
     <attribute name="SSLDisableSessionTickets" required="false">
-      <p>Disables use of TLS Session Tickets (RFC 4507) if set to
-      <code>true</code>. Default is <code>false</code>.</p>
+      <p>Disables use of TLS session tickets (RFC 5077) if set to
+      <code>true</code>. Default is <code>false</code>. Note that when TLS
+      session tickets are in use, the full peer certificate chain will only be
+      available on the first connection. Subsequent connections (that use a
+      ticket to estrablish the TLS session) will only have the peer certificate,
+      not the full chain.</p>
     </attribute>
 
   </attributes>

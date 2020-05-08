@@ -24,6 +24,7 @@ import org.apache.coyote.Request;
 import org.apache.juli.logging.Log;
 import org.apache.tomcat.util.buf.ByteChunk;
 import org.apache.tomcat.util.http.MimeHeaders;
+import org.apache.tomcat.util.http.parser.HttpParser;
 import org.apache.tomcat.util.net.AbstractEndpoint;
 import org.apache.tomcat.util.net.SocketWrapper;
 import org.apache.tomcat.util.res.StringManager;
@@ -34,7 +35,6 @@ public abstract class AbstractInputBuffer<S> implements InputBuffer{
      * The string manager for this package.
      */
     protected static final StringManager sm = StringManager.getManager(Constants.Package);
-
 
     /**
      * Associated Coyote request.
@@ -108,6 +108,12 @@ public abstract class AbstractInputBuffer<S> implements InputBuffer{
      * Index of the last active filter.
      */
     protected int lastActiveFilter;
+
+
+    protected boolean rejectIllegalHeaderName;
+
+
+    protected HttpParser httpParser;
 
 
     // ------------------------------------------------------------- Properties

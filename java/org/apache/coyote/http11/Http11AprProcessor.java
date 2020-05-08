@@ -35,9 +35,11 @@ import org.apache.tomcat.jni.SSLSocket;
 import org.apache.tomcat.jni.Sockaddr;
 import org.apache.tomcat.jni.Socket;
 import org.apache.tomcat.util.ExceptionUtils;
+import org.apache.tomcat.util.http.parser.HttpParser;
 import org.apache.tomcat.util.net.AbstractEndpoint.Handler.SocketState;
 import org.apache.tomcat.util.net.AprEndpoint;
 import org.apache.tomcat.util.net.SSLSupport;
+import org.apache.tomcat.util.net.SendfileKeepAliveState;
 import org.apache.tomcat.util.net.SocketStatus;
 import org.apache.tomcat.util.net.SocketWrapper;
 
@@ -59,12 +61,17 @@ public class Http11AprProcessor extends AbstractHttp11Processor<Long> {
     // ----------------------------------------------------------- Constructors
 
 
-    public Http11AprProcessor(int headerBufferSize, AprEndpoint endpoint, int maxTrailerSize,
-            Set<String> allowedTrailerHeaders, int maxExtensionSize, int maxSwallowSize) {
+    public Http11AprProcessor(int headerBufferSize, boolean rejectIllegalHeaderName,
+            AprEndpoint endpoint, int maxTrailerSize, Set<String> allowedTrailerHeaders,
+            int maxExtensionSize, int maxSwallowSize, String relaxedPathChars,
+            String relaxedQueryChars) {
 
         super(endpoint);
 
-        inputBuffer = new InternalAprInputBuffer(request, headerBufferSize);
+        httpParser = new HttpParser(relaxedPathChars, relaxedQueryChars);
+
+        inputBuffer = new InternalAprInputBuffer(request, headerBufferSize, rejectIllegalHeaderName,
+                httpParser);
         request.setInputBuffer(inputBuffer);
 
         outputBuffer = new InternalAprOutputBuffer(response, headerBufferSize);
@@ -198,7 +205,15 @@ public class Http11AprProcessor extends AbstractHttp11Processor<Long> {
         // Do sendfile as needed: add socket to sendfile and end
         if (sendfileData != null && !getErrorState().isError()) {
             sendfileData.socket = socketWrapper.getSocket().longValue();
-            sendfileData.keepAlive = keepAlive;
+            if (keepAlive) {
+                if (getInputBuffer().available(false) == 0) {
+                    sendfileData.keepAliveState = SendfileKeepAliveState.OPEN;
+                } else {
+                    sendfileData.keepAliveState = SendfileKeepAliveState.PIPELINED;
+                }
+            } else {
+                sendfileData.keepAliveState = SendfileKeepAliveState.NONE;
+            }
             switch (((AprEndpoint)endpoint).getSendfile().add(sendfileData)) {
             case DONE:
                 return false;
@@ -313,9 +328,8 @@ public class Http11AprProcessor extends AbstractHttp11Processor<Long> {
                     } catch (Exception e) {
                         log.warn(sm.getString("http11processor.socket.info"), e);
                     }
-                } else {
-                    request.remoteHost().setString(socketWrapper.getRemoteHost());
                 }
+                request.remoteHost().setString(socketWrapper.getRemoteHost());
             }
             break;
         }
@@ -378,11 +392,17 @@ public class Http11AprProcessor extends AbstractHttp11Processor<Long> {
                         request.setAttribute(SSLSupport.CIPHER_SUITE_KEY, sslO);
                     }
                     // Get client certificate and the certificate chain if present
-                    // certLength == -1 indicates an error
+                    // certLength == -1 indicates an error unless TLS session tickets
+                    // are in use in which case OpenSSL won't store the chain in the
+                    // ticket.
                     int certLength = SSLSocket.getInfoI(socketRef, SSL.SSL_INFO_CLIENT_CERT_CHAIN);
                     byte[] clientCert = SSLSocket.getInfoB(socketRef, SSL.SSL_INFO_CLIENT_CERT);
                     X509Certificate[] certs = null;
-                    if (clientCert != null  && certLength > -1) {
+
+                    if (clientCert != null) {
+                        if (certLength < 0) {
+                            certLength = 0;
+                        }
                         certs = new X509Certificate[certLength + 1];
                         CertificateFactory cf;
                         if (clientCertProvider == null) {

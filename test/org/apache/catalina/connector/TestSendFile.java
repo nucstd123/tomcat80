@@ -36,8 +36,6 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import static org.junit.Assert.assertEquals;
-
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -78,10 +76,10 @@ public class TestSendFile extends TomcatBaseTest {
             for (int i = 0; i < ITERATIONS; i++) {
                 long start = System.currentTimeMillis();
                 int rc = getUrl("http://localhost:" + getPort() + "/servlet" + i, bc, null, respHeaders);
-                assertEquals(HttpServletResponse.SC_OK, rc);
+                Assert.assertEquals(HttpServletResponse.SC_OK, rc);
                 System.out.println("Client received " + bc.getLength() + " bytes in "
                         + (System.currentTimeMillis() - start) + " ms.");
-                assertEquals(EXPECTED_CONTENT_LENGTH * (i + 1), bc.getLength());
+                Assert.assertEquals(EXPECTED_CONTENT_LENGTH * (i + 1), bc.getLength());
 
                 bc.recycle();
             }
@@ -130,8 +128,8 @@ public class TestSendFile extends TomcatBaseTest {
             resp.setContentLengthLong(f.length());
             if (Boolean.TRUE.equals(req.getAttribute(Globals.SENDFILE_SUPPORTED_ATTR))) {
                 req.setAttribute(Globals.SENDFILE_FILENAME_ATTR, f.getAbsolutePath());
-                req.setAttribute(Globals.SENDFILE_FILE_START_ATTR, new Long(0));
-                req.setAttribute(Globals.SENDFILE_FILE_END_ATTR, new Long(f.length()));
+                req.setAttribute(Globals.SENDFILE_FILE_START_ATTR, Long.valueOf(0));
+                req.setAttribute(Globals.SENDFILE_FILE_END_ATTR, Long.valueOf(f.length()));
             } else {
                 byte[] c = new byte[8192];
                 try (BufferedInputStream in = new BufferedInputStream(new FileInputStream(f))) {
@@ -200,8 +198,8 @@ public class TestSendFile extends TomcatBaseTest {
                 resp.setCharacterEncoding("ISO-8859-1");
                 resp.setContentLengthLong(file.length());
                 req.setAttribute(Globals.SENDFILE_FILENAME_ATTR, file.getAbsolutePath());
-                req.setAttribute(Globals.SENDFILE_FILE_START_ATTR, new Long(0));
-                req.setAttribute(Globals.SENDFILE_FILE_END_ATTR, new Long(file.length()));
+                req.setAttribute(Globals.SENDFILE_FILE_START_ATTR, Long.valueOf(0));
+                req.setAttribute(Globals.SENDFILE_FILE_END_ATTR, Long.valueOf(file.length()));
                 file.delete();
             } else {
                 byte[] c = new byte[1024];

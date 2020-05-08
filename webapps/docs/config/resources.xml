@@ -68,9 +68,9 @@
 
       <attribute name="allowLinking" required="false">
         <p>If the value of this flag is <code>true</code>, symlinks will be
-        allowed inside the web application, pointing to resources outside the
-        web application base path. If not specified, the default value
-        of the flag is <code>false</code>.</p>
+        allowed inside the web application, pointing to resources inside or
+        outside the web application base path. If not specified, the default
+        value of the flag is <code>false</code>.</p>
         <p><b>NOTE: This flag MUST NOT be set to true on the Windows platform
         (or any other OS which does not have a case sensitive filesystem),
         as it will disable case sensitivity checks, allowing JSP source code
@@ -149,9 +149,27 @@
 
   <subsection name="Standard Implementation">
 
+    <h3>Standard Root Implementation</h3>
+
     <p>The standard implementation of <strong>Resources</strong> is
-    <strong>org.apache.catalina.webresources.StandardRoot</strong>, and
-    is configured by its parent Context element.</p>
+    <strong>org.apache.catalina.webresources.StandardRoot</strong>. It does not
+    support any additional attributes.</p>
+
+    <h3>Extracting Root Implementation</h3>
+
+    <p>The extracting implementation of <strong>Resources</strong> is
+    <strong>org.apache.catalina.webresources.ExtractingRoot</strong>. It does not
+    support any additional attributes.</p>
+
+    <p>When deploying web applications as packed WAR files, the extracting root
+    will extract any JAR files from <code>/WEB-INF/lib</code> to a
+    <code>application-jars</code> directory located in the web
+    application&apos;s working directory. These extracted JARs will be removed
+    when the web application stops.</p>
+
+    <p>Extracting JAR files from a packed WAR may provide a performance
+    improvement, particularly at web application start when JAR scanning is
+    required by the application.</p>
 
   </subsection>
 

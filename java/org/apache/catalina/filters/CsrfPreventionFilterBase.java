@@ -29,7 +29,9 @@ import org.apache.juli.logging.LogFactory;
 
 public abstract class CsrfPreventionFilterBase extends FilterBase {
 
-    private static final Log log = LogFactory.getLog(CsrfPreventionFilterBase.class);
+    // Log must be non-static as loggers are created per class-loader and this
+    // Filter may be used in multiple class loaders
+    private final Log log = LogFactory.getLog(CsrfPreventionFilterBase.class); // must not be static
 
     private String randomClass = SecureRandom.class.getName();
 
@@ -78,8 +80,8 @@ public abstract class CsrfPreventionFilterBase extends FilterBase {
 
         try {
             Class<?> clazz = Class.forName(randomClass);
-            randomSource = (Random) clazz.newInstance();
-        } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
+            randomSource = (Random) clazz.getConstructor().newInstance();
+        } catch (ReflectiveOperationException e) {
             ServletException se = new ServletException(sm.getString(
                     "csrfPrevention.invalidRandomClass", randomClass), e);
             throw se;

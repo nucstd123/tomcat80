@@ -36,13 +36,16 @@ import org.apache.juli.logging.LogFactory;
  */
 public class HttpHeaderSecurityFilter extends FilterBase {
 
-    private static final Log log = LogFactory.getLog(HttpHeaderSecurityFilter.class);
+    // Log must be non-static as loggers are created per class-loader and this
+    // Filter may be used in multiple class loaders
+    private final Log log = LogFactory.getLog(HttpHeaderSecurityFilter.class); // must not be static
 
     // HSTS
     private static final String HSTS_HEADER_NAME = "Strict-Transport-Security";
     private boolean hstsEnabled = true;
     private int hstsMaxAgeSeconds = 0;
     private boolean hstsIncludeSubDomains = false;
+    private boolean hstsPreload = false;
     private String hstsHeaderValue;
 
     // Click-jacking protection
@@ -71,6 +74,9 @@ public class HttpHeaderSecurityFilter extends FilterBase {
         hstsValue.append(hstsMaxAgeSeconds);
         if (hstsIncludeSubDomains) {
             hstsValue.append(";includeSubDomains");
+        }
+        if (hstsPreload) {
+            hstsValue.append(";preload");
         }
         hstsHeaderValue = hstsValue.toString();
 
@@ -169,17 +175,24 @@ public class HttpHeaderSecurityFilter extends FilterBase {
     }
 
 
+    public boolean isHstsPreload() {
+        return hstsPreload;
+    }
+
+
+    public void setHstsPreload(boolean hstsPreload) {
+        this.hstsPreload = hstsPreload;
+    }
+
 
     public boolean isAntiClickJackingEnabled() {
         return antiClickJackingEnabled;
     }
 
 
-
     public void setAntiClickJackingEnabled(boolean antiClickJackingEnabled) {
         this.antiClickJackingEnabled = antiClickJackingEnabled;
     }
-
 
 
     public String getAntiClickJackingOption() {
@@ -197,7 +210,6 @@ public class HttpHeaderSecurityFilter extends FilterBase {
         throw new IllegalArgumentException(
                 sm.getString("httpHeaderSecurityFilter.clickjack.invalid", antiClickJackingOption));
     }
-
 
 
     public String getAntiClickJackingUri() {
@@ -226,15 +238,18 @@ public class HttpHeaderSecurityFilter extends FilterBase {
         this.antiClickJackingUri = uri;
     }
 
+
     public boolean isXssProtectionEnabled() {
         return xssProtectionEnabled;
     }
+
 
     public void setXssProtectionEnabled(boolean xssProtectionEnabled) {
         this.xssProtectionEnabled = xssProtectionEnabled;
     }
 
-    private static enum XFrameOption {
+
+    private enum XFrameOption {
         DENY("DENY"),
         SAME_ORIGIN("SAMEORIGIN"),
         ALLOW_FROM("ALLOW-FROM");
